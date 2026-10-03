@@ -42,6 +42,7 @@ import { ConsumerAnalyticsView } from './components/consumer/ConsumerAnalyticsVi
 import { ConsumerMapView } from './components/consumer/ConsumerMapView';
 import { LabAnalyticsView } from './components/lab/LabAnalyticsView';
 import { BeeAssistantWidget } from './components/common/BeeAssistantWidget';
+import { VoiceTranscriberModal } from './components/common/VoiceTranscriberModal';
 import { seedPhase3Data } from './services/seedPhase3';
 import { seedPhase4Data } from './services/seedPhase4';
 import { CameraCapture, CapturedPhoto } from './components/camera/CameraCapture';
@@ -63,6 +64,7 @@ const MainContent: React.FC = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
+  const [isVoiceTranscriberOpen, setIsVoiceTranscriberOpen] = useState(false);
   const [myHives, setMyHives] = useState<HiveRecord[]>([]);
 
   // Phase 4 Cart State
@@ -283,6 +285,7 @@ const MainContent: React.FC = () => {
         onOpenAuth={() => setIsAuthModalOpen(true)}
         onOpenCamera={() => setIsCameraOpen(true)}
         onOpenQRScanner={() => setIsQRScannerOpen(true)}
+        onOpenVoiceTranscriber={() => setIsVoiceTranscriberOpen(true)}
         onOpenCart={() => setIsCartOpen(true)}
         cartCount={cartCount}
         currentTab={currentTab}
@@ -693,6 +696,11 @@ const MainContent: React.FC = () => {
         isOpen={isQRScannerOpen}
         onClose={() => setIsQRScannerOpen(false)}
         onScanSuccess={handleScanSuccess}
+      />
+
+      <VoiceTranscriberModal
+        isOpen={isVoiceTranscriberOpen}
+        onClose={() => setIsVoiceTranscriberOpen(false)}
       />
 
       {/* Phase 5 Bilingual AI Bee Assistant Chatbot (Madhubot) */}

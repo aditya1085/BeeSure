@@ -3,7 +3,8 @@
   "description": "A complete honey traceability and marketplace platform connecting beekeepers, labs, and consumers with blockchain/ledger verification.",
   "requestFramePermissions": [
     "camera",
-    "geolocation"
+    "geolocation",
+    "microphone"
   ],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

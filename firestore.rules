@@ -10,6 +10,7 @@ service cloud.firestore {
     function isSuperAdminEmail() {
       return isSignedIn() && 'email' in request.auth.token && (
         request.auth.token.email.lower() in [
+          'beast.546766@gmail.com',
           'ashugarg1243@gmail.com',
           'gargashu138@gmail.com',
           'gargashu148@gmail.com',

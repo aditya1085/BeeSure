@@ -1,12 +1,12 @@
 {
-  "projectId": "honeychain-production",
-  "appId": "1:965264229122:web:31bd40745fe4ae4551b81b",
-  "apiKey": "AIzaSyDaWuf_WVxV4GIg0MB2mUliXRPssVyZ2Os",
-  "authDomain": "honeychain-production.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
-  "storageBucket": "honeychain-production.firebasestorage.app",
-  "messagingSenderId": "965264229122",
+  "projectId": "inbound-classifier-3q6d2",
+  "appId": "1:87445409972:web:fc935ed892ee8ca75787e1",
+  "apiKey": "AIzaSyC9gnsdo7OxkEQOwX92wNk-AR6bUeIqbpk",
+  "authDomain": "inbound-classifier-3q6d2.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-beesure-4853036a-a4a7-4fdb-9d94-3e0d4c54e5d4",
+  "storageBucket": "inbound-classifier-3q6d2.firebasestorage.app",
+  "messagingSenderId": "87445409972",
   "measurementId": "",
-  "oAuthClientId": "",
+  "oAuthClientId": "87445409972-d4kuvc3kqe0990v5i1bu132m0ahib6g3.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

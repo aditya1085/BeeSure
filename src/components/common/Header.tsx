@@ -21,6 +21,7 @@ import {
   Settings,
   Activity,
   MapPin,
+  Mic,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -31,6 +32,7 @@ interface HeaderProps {
   onOpenAuth: () => void;
   onOpenCamera: () => void;
   onOpenQRScanner: () => void;
+  onOpenVoiceTranscriber?: () => void;
   onOpenCart?: () => void;
   cartCount?: number;
   currentTab: string;
@@ -41,6 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAuth,
   onOpenCamera,
   onOpenQRScanner,
+  onOpenVoiceTranscriber,
   onOpenCart,
   cartCount = 0,
   currentTab,
@@ -493,6 +496,17 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Camera className="w-4 h-4 text-amber-500" />
           </button>
+
+          {/* Voice Transcriber (gemini-3.5-transcribe) */}
+          {onOpenVoiceTranscriber && (
+            <button
+              onClick={onOpenVoiceTranscriber}
+              title="Voice Input & Audio Transcription (Gemini 3.5 Transcribe)"
+              className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 border border-amber-500/20 transition group"
+            >
+              <Mic className="w-4 h-4 group-hover:scale-110 transition" />
+            </button>
+          )}
 
           {/* Language Switcher */}
           <button

@@ -10,6 +10,8 @@ import {
   User,
   ShieldCheck,
   ChevronDown,
+  Mic,
+  Square,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -24,13 +26,17 @@ export const BeeAssistantWidget: React.FC = () => {
   const [chatLang, setChatLang] = useState<'en' | 'hi'>(appLang === 'hi' ? 'hi' : 'en');
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
       role: 'assistant',
       content:
         appLang === 'hi'
-          ? 'नमस्ते! मैं मधुमित्र (Madhubot) हूँ — बीश्योर (BeeSure) का विशेषज्ञ एआई सहायक। शहद की शुद्धता, FSSAI मानकों, छत्ते के रख-रखाव या ब्लॉकचेन क्यूआर कोड के बारे में कुछ भी पूछें!'
-          : 'Hello! I am Madhubot, your expert AI Bee Assistant for BeeSure. Ask me about honey purity, FSSAI regulations, brood temperature, or blockchain QR verification!',
+          ? 'नमस्ते! मैं मधुमित्र (Madhubot) हूँ — बीश्योर (BeeSure) का विशेषज्ञ एआई सहायक। शहद की शुद्धता, FSSAI मानकों, छत्ते के रख-रखाव या ब्लॉकचेन क्यूआर कोड के बारे में कुछ भी पूछें! आप माइक बटन दबाकर बोल भी सकते हैं।'
+          : 'Hello! I am Madhubot, your expert AI Bee Assistant for BeeSure. Ask me about honey purity, FSSAI regulations, brood temperature, or blockchain QR verification! You can also click the microphone to speak your question.',
     },
   ]);
 
@@ -42,6 +48,76 @@ export const BeeAssistantWidget: React.FC = () => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isOpen]);
+
+  // Handle voice recording
+  const startVoiceRecording = async () => {
+    audioChunksRef.current = [];
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        stream.getTracks().forEach((t) => t.stop());
+        await transcribeVoiceQuery(audioBlob);
+      };
+
+      recorder.start(250);
+      setIsRecordingAudio(true);
+    } catch (err) {
+      console.warn('Microphone permission or access error:', err);
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecordingAudio(false);
+  };
+
+  const transcribeVoiceQuery = async (blob: Blob) => {
+    setIsTranscribing(true);
+    try {
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+      reader.readAsDataURL(blob);
+      const base64Data = await base64Promise;
+
+      const resp = await fetch('/api/transcribe-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audioBase64: base64Data,
+          mimeType: blob.type || 'audio/webm',
+          prompt: 'Transcribe this voice question accurately verbatim. Output only the transcribed text without extra preamble.',
+        }),
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data.transcript) {
+          setInputMessage(data.transcript);
+          // Automatically send transcribed voice query
+          handleSendMessage(data.transcript);
+        }
+      }
+    } catch (err) {
+      console.warn('Voice transcription note:', err);
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
 
   const quickPrompts = {
     en: [
@@ -254,13 +330,40 @@ export const BeeAssistantWidget: React.FC = () => {
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              placeholder={chatLang === 'hi' ? 'मधुमित्र से पूछें...' : 'Ask Madhubot anything...'}
-              disabled={loading}
-              className="flex-1 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-none text-xs focus:ring-2 focus:ring-amber-500 dark:text-white"
+              placeholder={
+                isRecordingAudio
+                  ? 'Listening to microphone...'
+                  : isTranscribing
+                  ? 'Transcribing with gemini-3.5-transcribe...'
+                  : chatLang === 'hi'
+                  ? 'मधुमित्र से पूछें...'
+                  : 'Ask Madhubot anything...'
+              }
+              disabled={loading || isRecordingAudio || isTranscribing}
+              className={`flex-1 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-none text-xs focus:ring-2 focus:ring-amber-500 dark:text-white ${
+                isRecordingAudio ? 'ring-2 ring-red-500 animate-pulse text-red-500' : ''
+              }`}
             />
+
+            {/* Microphone Transcribe Button */}
+            <button
+              type="button"
+              onClick={isRecordingAudio ? stopVoiceRecording : startVoiceRecording}
+              disabled={loading || isTranscribing}
+              className={`p-2.5 rounded-xl transition cursor-pointer shadow-xs ${
+                isRecordingAudio
+                  ? 'bg-red-500 text-white animate-pulse'
+                  : 'bg-slate-100 dark:bg-slate-800 hover:bg-amber-500/20 text-slate-700 dark:text-slate-300 hover:text-amber-600'
+              }`}
+              title={isRecordingAudio ? 'Stop Recording' : 'Speak with Microphone (gemini-3.5-transcribe)'}
+              aria-label="Microphone Speech Input"
+            >
+              {isRecordingAudio ? <Square className="w-4 h-4 fill-white" /> : <Mic className="w-4 h-4" />}
+            </button>
+
             <button
               type="submit"
-              disabled={!inputMessage.trim() || loading}
+              disabled={!inputMessage.trim() || loading || isRecordingAudio || isTranscribing}
               className="p-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition disabled:opacity-40 cursor-pointer shadow-xs"
               aria-label="Send Message"
             >
