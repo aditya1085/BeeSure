@@ -1410,6 +1410,9 @@ async function computePlatformStats() {
 
   // State yields breakdown
   const stateYields: Record<string, { hives: number; harvestKg: number; salesGmv: number; purityRate: number }> = {};
+  const stateHarvestKg: Record<string, number> = {};
+  const stateVarietyYields: Record<string, Record<string, number>> = {};
+
   beekeepers.forEach((b) => {
     const st = b.state || 'Other';
     if (!stateYields[st]) {
@@ -1425,9 +1428,24 @@ async function computePlatformStats() {
   });
 
   batches.forEach((b) => {
-    const st = b.originState || 'Other';
+    const st = b.originState || b.state || 'Other';
+    const flora = b.floralSource || 'Mustard';
+    const wt = Number(b.totalWeightKg) || Number(b.totalQuantityKg) || 0;
     if (!stateYields[st]) stateYields[st] = { hives: 0, harvestKg: 0, salesGmv: 0, purityRate: 100 };
-    stateYields[st].harvestKg += Number(b.totalWeightKg) || 0;
+    stateYields[st].harvestKg += wt;
+    stateHarvestKg[st] = (stateHarvestKg[st] || 0) + wt;
+    if (!stateVarietyYields[st]) stateVarietyYields[st] = {};
+    stateVarietyYields[st][flora] = (stateVarietyYields[st][flora] || 0) + wt;
+  });
+
+  harvests.forEach((hv) => {
+    const st = (hv as any).state || 'Other';
+    const flora = hv.floralSource || 'Mustard';
+    const wt = Number(hv.quantityKg) || 0;
+    if (!stateYields[st]) stateYields[st] = { hives: 0, harvestKg: 0, salesGmv: 0, purityRate: 100 };
+    if (!stateVarietyYields[st]) stateVarietyYields[st] = {};
+    stateVarietyYields[st][flora] = (stateVarietyYields[st][flora] || 0) + wt;
+    stateHarvestKg[st] = (stateHarvestKg[st] || 0) + wt;
   });
 
   orders.forEach((o) => {
@@ -1489,6 +1507,8 @@ async function computePlatformStats() {
     speciesDistribution,
     floralDistribution,
     stateYields,
+    stateVarietyYields,
+    harvestYieldsByState: stateHarvestKg,
     monthlyTrends,
     qualityMetrics,
     updatedAt: new Date().toISOString(),

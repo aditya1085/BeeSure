@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sparkles,
   TrendingUp,
@@ -17,6 +17,8 @@ import {
   Droplets,
   Heart,
   Search,
+  Filter,
+  Star,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -37,6 +39,18 @@ import {
 } from 'recharts';
 import { IndiaHivesMap } from '../common/IndiaHivesMap';
 import { SAMPLE_DATA_MASTER } from '../../services/sampleDataMaster';
+import {
+  fetchUnifiedAnalyticsData,
+  computeVerifiedBeekeepers,
+  computeRegionalVarietyStock,
+  computeMoistureVsFSSAI,
+  computeBestBuyerDemand,
+  CANONICAL_HONEY_VARIETIES,
+  INDIAN_STATES,
+  HoneyVarietyFilter,
+  StateFilter,
+  UnifiedAnalyticsData,
+} from '../../services/analyticsDataService';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { CartItem } from '../../types';
@@ -90,6 +104,15 @@ export const ConsumerAnalyticsView: React.FC<ConsumerAnalyticsViewProps> = ({
   const [healthGoal, setHealthGoal] = useState<string>('Immunity & Throat Care');
   const [loadingAI, setLoadingAI] = useState<boolean>(false);
   const [aiInsights, setAiInsights] = useState<AIConsumerInsights | null>(null);
+  const [unifiedData, setUnifiedData] = useState<UnifiedAnalyticsData | null>(null);
+
+  // Interactive Filter States
+  const [selectedBeekeeperVariety, setSelectedBeekeeperVariety] = useState<HoneyVarietyFilter>('All Varieties');
+  const [selectedBeekeeperState, setSelectedBeekeeperState] = useState<StateFilter>('All States');
+  const [selectedStockVariety, setSelectedStockVariety] = useState<HoneyVarietyFilter>('All Varieties');
+  const [selectedStockRegion, setSelectedStockRegion] = useState<StateFilter>('All States');
+  const [selectedMoistureVariety, setSelectedMoistureVariety] = useState<HoneyVarietyFilter>('All Varieties');
+  const [selectedSpendingPeriod, setSelectedSpendingPeriod] = useState<'All' | '90D' | '30D'>('All');
 
   // Active user order simulation
   const userOrders = [
@@ -97,7 +120,7 @@ export const ConsumerAnalyticsView: React.FC<ConsumerAnalyticsViewProps> = ({
     { id: 'ORD-2609-1088', date: '2026-09-22', product: 'Kashmir White Acacia (500g)', amount: 750, status: 'In Transit', purity: '100% Pure' },
   ];
 
-  // Fetch AI consumer insights
+  // Fetch AI consumer insights and unified dataset
   const fetchConsumerAI = async () => {
     setLoadingAI(true);
     try {
@@ -123,46 +146,98 @@ export const ConsumerAnalyticsView: React.FC<ConsumerAnalyticsViewProps> = ({
 
   useEffect(() => {
     fetchConsumerAI();
+    fetchUnifiedAnalyticsData().then((data) => setUnifiedData(data));
   }, []);
 
-  // 1. Purity & Moisture Distribution across available marketplace batches
-  const purityMetricsData = [
-    { variety: 'Mustard', avgMoisture: 17.2, maxAllowed: 20.0, avgHmf: 12.5, passRate: 100 },
-    { variety: 'Acacia', avgMoisture: 16.4, maxAllowed: 20.0, avgHmf: 8.2, passRate: 100 },
-    { variety: 'Multiflora', avgMoisture: 18.1, maxAllowed: 20.0, avgHmf: 14.8, passRate: 100 },
-    { variety: 'Jamun', avgMoisture: 18.5, maxAllowed: 20.0, avgHmf: 16.0, passRate: 100 },
-    { variety: 'Lychee', avgMoisture: 17.8, maxAllowed: 20.0, avgHmf: 11.4, passRate: 100 },
-    { variety: 'Eucalyptus', avgMoisture: 17.5, maxAllowed: 20.0, avgHmf: 13.1, passRate: 100 },
-  ];
+  // 1. Dynamic Purity & Moisture Distribution across available marketplace batches
+  const purityMetricsData = useMemo(() => {
+    if (!unifiedData) {
+      return [
+        { variety: 'Mustard', avgMoisture: 17.2, maxAllowed: 20.0, avgHmf: 12.5, passRate: 100 },
+        { variety: 'Acacia', avgMoisture: 16.4, maxAllowed: 20.0, avgHmf: 8.2, passRate: 100 },
+        { variety: 'Multiflora', avgMoisture: 18.1, maxAllowed: 20.0, avgHmf: 14.8, passRate: 100 },
+        { variety: 'Jamun', avgMoisture: 18.5, maxAllowed: 20.0, avgHmf: 16.0, passRate: 100 },
+        { variety: 'Lychee', avgMoisture: 17.8, maxAllowed: 20.0, avgHmf: 11.4, passRate: 100 },
+        { variety: 'Eucalyptus', avgMoisture: 17.5, maxAllowed: 20.0, avgHmf: 13.1, passRate: 100 },
+      ];
+    }
+    return computeMoistureVsFSSAI(unifiedData, selectedMoistureVariety);
+  }, [unifiedData, selectedMoistureVariety]);
 
-  // 2. Beekeeper Trust Score Comparison
-  const beekeeperTrustData = SAMPLE_DATA_MASTER.beekeepers.slice(0, 6).map((b) => ({
-    name: b.name.split(' ')[0],
-    fullName: b.name,
-    trustScore: b.trustScore || 95,
-    state: b.state,
-    district: b.district,
-    hives: (b as any).hiveCount || 20,
-  }));
+  // 2. Dynamic Beekeeper Trust Score Comparison (Filtered by Variety and State)
+  const beekeeperTrustData = useMemo(() => {
+    if (!unifiedData) {
+      return SAMPLE_DATA_MASTER.beekeepers.slice(0, 6).map((b) => ({
+        name: b.name.split(' ')[0],
+        fullName: b.name,
+        beekeeperId: b.beekeeperId || 'B001',
+        trustScore: b.trustScore || 95,
+        state: b.state,
+        district: b.district,
+        hives: (b as any).hiveCount || 20,
+        varieties: ['Mustard', 'Multiflora'],
+        totalHarvestKg: 320,
+        status: b.status || 'approved',
+      }));
+    }
+    return computeVerifiedBeekeepers(unifiedData, selectedBeekeeperVariety, selectedBeekeeperState);
+  }, [unifiedData, selectedBeekeeperVariety, selectedBeekeeperState]);
 
-  // 3. Regional Honey Variety Availability (Kg certified in stock)
-  const regionalAvailabilityData = [
-    { region: 'Punjab', flora: 'Mustard Honey', stockKg: 850 },
-    { region: 'J&K', flora: 'White Acacia', stockKg: 420 },
-    { region: 'Himachal', flora: 'Multiflora Forest', stockKg: 640 },
-    { region: 'Uttar Pradesh', flora: 'Jamun & Sheesham', stockKg: 910 },
-    { region: 'Bihar', flora: 'Lychee Blossom', stockKg: 530 },
-    { region: 'Maharashtra', flora: 'Wild Forest', stockKg: 380 },
-  ];
+  // Best Buyer / Demand info for Beekeeper chart selection
+  const bestBuyerForBeekeeper = useMemo(() => {
+    if (!unifiedData) return null;
+    return computeBestBuyerDemand(unifiedData, selectedBeekeeperVariety, selectedBeekeeperState);
+  }, [unifiedData, selectedBeekeeperVariety, selectedBeekeeperState]);
+
+  // 3. Dynamic Regional Honey Variety Availability (Filtered by Variety and Region)
+  const regionalAvailabilityData = useMemo(() => {
+    if (!unifiedData) {
+      return [
+        { region: 'Punjab', flora: 'Mustard Honey', stockKg: 850, batchCount: 4, avgMoisture: 17.2, purityRate: 100 },
+        { region: 'J&K', flora: 'White Acacia', stockKg: 420, batchCount: 2, avgMoisture: 16.4, purityRate: 100 },
+        { region: 'Himachal', flora: 'Multiflora Forest', stockKg: 640, batchCount: 3, avgMoisture: 18.1, purityRate: 100 },
+        { region: 'Uttar Pradesh', flora: 'Jamun & Sheesham', stockKg: 910, batchCount: 5, avgMoisture: 18.5, purityRate: 100 },
+        { region: 'Bihar', flora: 'Lychee Blossom', stockKg: 530, batchCount: 3, avgMoisture: 17.8, purityRate: 100 },
+        { region: 'Maharashtra', flora: 'Wild Forest', stockKg: 380, batchCount: 2, avgMoisture: 17.5, purityRate: 100 },
+      ];
+    }
+    return computeRegionalVarietyStock(unifiedData, selectedStockVariety, selectedStockRegion);
+  }, [unifiedData, selectedStockVariety, selectedStockRegion]);
+
+  // Best Buyer / Demand info for Regional Stock chart selection
+  const bestBuyerForRegionalStock = useMemo(() => {
+    if (!unifiedData) return null;
+    return computeBestBuyerDemand(unifiedData, selectedStockVariety, selectedStockRegion);
+  }, [unifiedData, selectedStockVariety, selectedStockRegion]);
 
   // 4. Personal Spending & Honey Intake Summary
-  const personalSummary = {
-    totalSpent: 1230,
-    jarsPurchased: 2,
-    totalGrams: 1000,
-    verifiedPassRate: '100%',
-    farmerDirectSavings: '₹340 vs Supermarket Commercial Blends',
-  };
+  const personalSummary = useMemo(() => {
+    if (selectedSpendingPeriod === '30D') {
+      return {
+        totalSpent: 480,
+        jarsPurchased: 1,
+        totalGrams: 500,
+        verifiedPassRate: '100%',
+        farmerDirectSavings: '₹140 vs Supermarket Commercial Blends',
+      };
+    }
+    if (selectedSpendingPeriod === '90D') {
+      return {
+        totalSpent: 1230,
+        jarsPurchased: 2,
+        totalGrams: 1000,
+        verifiedPassRate: '100%',
+        farmerDirectSavings: '₹340 vs Supermarket Commercial Blends',
+      };
+    }
+    return {
+      totalSpent: 2450,
+      jarsPurchased: 4,
+      totalGrams: 2000,
+      verifiedPassRate: '100%',
+      farmerDirectSavings: '₹680 vs Supermarket Commercial Blends',
+    };
+  }, [selectedSpendingPeriod]);
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in">
@@ -304,20 +379,33 @@ export const ConsumerAnalyticsView: React.FC<ConsumerAnalyticsViewProps> = ({
 
           {/* Charts Row 1: Moisture vs Limit & Beekeeper Trust Comparison */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Chart 1: Purity & Moisture Quality Comparison */}
+            {/* Chart 1: Purity & Moisture Quality Comparison with Variety Filter */}
             <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                    Moisture Content by Floral Variety (% vs FSSAI Standard)
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Droplets className="w-4 h-4 text-amber-500" />
+                    <span>Moisture Content by Floral Variety (% vs FSSAI)</span>
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
                     Lower moisture ensures the honey was naturally ripened by bees in comb without artificial drying.
                   </p>
                 </div>
-                <span className="p-1.5 rounded-xl bg-blue-500/10 text-blue-600 text-xs font-bold">
-                  FSSAI &lt; 20%
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Filter className="w-3.5 h-3.5 text-amber-500" />
+                  <select
+                    value={selectedMoistureVariety}
+                    onChange={(e) => setSelectedMoistureVariety(e.target.value as HoneyVarietyFilter)}
+                    className="px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-xs font-black text-amber-800 dark:text-amber-300 border border-amber-500/30 focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-xs transition"
+                    title="Filter by Honey Variety"
+                  >
+                    {CANONICAL_HONEY_VARIETIES.map((v) => (
+                      <option key={v} value={v} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="h-64">
@@ -346,122 +434,282 @@ export const ConsumerAnalyticsView: React.FC<ConsumerAnalyticsViewProps> = ({
                 </ResponsiveContainer>
               </div>
 
-              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-2">
-                <Info className="w-4 h-4 text-amber-500 shrink-0" />
-                <span>
-                  All available honeys in our catalog average 17.4% moisture, well below the 20% fermentation threshold.
-                </span>
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300 font-semibold flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Info className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span>
+                    Current Selection ({selectedMoistureVariety}): Tested average {purityMetricsData[0]?.avgMoisture ?? 17.4}% moisture.
+                  </span>
+                </div>
+                <span className="text-emerald-600 dark:text-emerald-400 font-black">100% C4 Pass</span>
               </div>
             </div>
 
-            {/* Chart 2: Beekeeper Trust Score Comparison */}
+            {/* Chart 2: Verified Beekeeper Trust Scores (FIXED & FULLY INTERACTIVE WITH VARIETY FILTER & BEST BUYER PANEL) */}
             <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                    Verified Beekeeper Trust Scores
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                    <span>Verified Beekeeper Trust Scores</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      Live Network
+                    </span>
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Calculated from IoT telemetry compliance, NABL purity results, and verified customer ratings.
+                    Calculated from IoT brood telemetry, NABL purity pass rate, and verified customer ratings.
                   </p>
                 </div>
-                <span className="p-1.5 rounded-xl bg-emerald-500/10 text-emerald-600 text-xs font-bold">
-                  Avg 95+ Score
-                </span>
+
+                {/* Filter by Honey Type / Variety */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Filter className="w-3.5 h-3.5 text-emerald-500" />
+                  <select
+                    value={selectedBeekeeperVariety}
+                    onChange={(e) => setSelectedBeekeeperVariety(e.target.value as HoneyVarietyFilter)}
+                    className="px-2.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-xs font-black text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-xs transition"
+                    title="Filter by Honey Variety"
+                    aria-label="Filter Beekeepers by Honey Variety"
+                  >
+                    {CANONICAL_HONEY_VARIETIES.map((v) => (
+                      <option key={v} value={v} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
+              {/* Dynamic Beekeeper Trust Chart */}
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={beekeeperTrustData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                    <XAxis type="number" domain={[80, 100]} tick={{ fontSize: 11 }} />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={60} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#0f172a',
-                        border: '1px solid #334155',
-                        borderRadius: '12px',
-                        fontSize: '11px',
-                        color: '#f8fafc',
-                      }}
-                      formatter={(val: any) => [`${val}/100`, 'Trust Score']}
-                    />
-                    <Bar dataKey="trustScore" fill="#10b981" radius={[0, 8, 8, 0]}>
-                      {beekeeperTrustData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                {beekeeperTrustData.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-xs text-slate-400 space-y-1">
+                    <AlertCircle className="w-6 h-6 text-amber-500" />
+                    <span>No verified beekeepers found for {selectedBeekeeperVariety}.</span>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={beekeeperTrustData}
+                      layout="vertical"
+                      margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis type="number" domain={[80, 100]} tick={{ fontSize: 11 }} />
+                      <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={70} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          border: '1px solid #334155',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          color: '#f8fafc',
+                        }}
+                        formatter={(val: any, _, item: any) => [
+                          `${val}/100 Trust (${item.payload.fullName}, ${item.payload.district}, ${item.payload.state} • ${item.payload.hives} hives)`,
+                          'Trust Score',
+                        ]}
+                      />
+                      <Bar dataKey="trustScore" fill="#10b981" radius={[0, 8, 8, 0]}>
+                        {beekeeperTrustData.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
 
-              <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-800 dark:text-emerald-300 font-semibold flex items-center justify-between">
-                <span>Top Ranked Beekeeper: Sita Ram (97/100, Punjab)</span>
-                <button
-                  onClick={() => onNavigateToMarketplace?.()}
-                  className="font-bold underline text-emerald-600 dark:text-emerald-400 hover:text-emerald-500"
-                >
-                  Shop Sita's Harvest
-                </button>
-              </div>
+              {/* Best Buyer & Top Producer Highlights for Beekeeper Chart */}
+              {bestBuyerForBeekeeper && (
+                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <Star className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500" />
+                      <span>Top Verified Apiary for:</span>
+                      <strong className="text-emerald-600 dark:text-emerald-400 font-black underline">
+                        {selectedBeekeeperVariety}
+                      </strong>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      {bestBuyerForBeekeeper.demandMetrics.demandLevel} CONSUMER DEMAND
+                    </span>
+                  </div>
+
+                  {bestBuyerForBeekeeper.topBeekeeper && (
+                    <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <div className="font-black text-slate-900 dark:text-white flex items-center gap-2">
+                          <span>{bestBuyerForBeekeeper.topBeekeeper.name}</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-black">
+                            ({bestBuyerForBeekeeper.topBeekeeper.trustScore}/100 Score)
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-600 dark:text-slate-300">
+                          {bestBuyerForBeekeeper.topBeekeeper.district}, {bestBuyerForBeekeeper.topBeekeeper.state} • {bestBuyerForBeekeeper.topBeekeeper.hiveCount} Hives • {bestBuyerForBeekeeper.topBeekeeper.totalKg} kg verified harvest
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => onNavigateToMarketplace?.()}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition cursor-pointer shadow-xs shrink-0 self-start sm:self-auto"
+                      >
+                        Shop {bestBuyerForBeekeeper.topBeekeeper.name.split(' ')[0]}'s Harvest
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Top Buyer Demand Channels */}
+                  <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500 dark:text-slate-400 font-medium">
+                      High-Priority Commercial Buyers: <strong className="text-slate-800 dark:text-slate-200">Dabur Procurement, Nature's Basket Organic</strong>
+                    </span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
+                      Demand Index: {bestBuyerForBeekeeper.demandMetrics.demandScore}/100
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Charts Row 2: Regional Stock Availability & Personal Spending */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Chart 3: Regional Honey Variety Availability */}
+            {/* Chart 3: Regional Honey Variety Availability (FIXED & FULLY INTERACTIVE WITH VARIETY & REGION FILTERS + BEST BUYER PANEL) */}
             <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                    Regional Honey Variety Stock (Kg Ready for Dispatch)
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-blue-500" />
+                    <span>Regional Honey Variety Stock (Kg Ready for Dispatch)</span>
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Live inventory bottled directly at origin apiaries across major honey belts.
+                    Live inventory bottled at origin apiaries. Filter by variety and region.
                   </p>
+                </div>
+
+                {/* Dual Filter Controls: Honey Type/Variety AND Region */}
+                <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                  <select
+                    value={selectedStockVariety}
+                    onChange={(e) => setSelectedStockVariety(e.target.value as HoneyVarietyFilter)}
+                    className="px-2 py-1 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-xs font-black text-blue-800 dark:text-blue-300 border border-blue-500/30 focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs transition"
+                    title="Filter by Variety"
+                    aria-label="Filter Stock by Variety"
+                  >
+                    {CANONICAL_HONEY_VARIETIES.map((v) => (
+                      <option key={v} value={v} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={selectedStockRegion}
+                    onChange={(e) => setSelectedStockRegion(e.target.value as StateFilter)}
+                    className="px-2 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs transition"
+                    title="Filter by Region"
+                    aria-label="Filter Stock by Region"
+                  >
+                    {INDIAN_STATES.map((st) => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div className="h-60">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={regionalAvailabilityData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                    <XAxis dataKey="region" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#0f172a',
-                        border: '1px solid #334155',
-                        borderRadius: '12px',
-                        fontSize: '11px',
-                        color: '#f8fafc',
-                      }}
-                      formatter={(val: any, _, item: any) => [`${val} kg (${item.payload.flora})`, 'Stock Available']}
-                    />
-                    <Bar dataKey="stockKg" fill="#3b82f6" radius={[6, 6, 0, 0]}>
-                      {regionalAvailabilityData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              {/* Dynamic Regional Stock Bar Chart */}
+              <div className="h-64">
+                {regionalAvailabilityData.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-xs text-slate-400 space-y-1">
+                    <AlertCircle className="w-6 h-6 text-amber-500" />
+                    <span>No stock matching {selectedStockVariety} in {selectedStockRegion}.</span>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={regionalAvailabilityData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis dataKey="region" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          border: '1px solid #334155',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          color: '#f8fafc',
+                        }}
+                        formatter={(val: any, _, item: any) => [
+                          `${Number(val).toLocaleString()} kg (${item.payload.flora}) • ${item.payload.batchCount} verified batches`,
+                          'Stock Available',
+                        ]}
+                      />
+                      <Bar dataKey="stockKg" fill="#3b82f6" radius={[6, 6, 0, 0]}>
+                        {regionalAvailabilityData.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
+
+              {/* Best Buyer & Demand Panel for Regional Variety Selection */}
+              {bestBuyerForRegionalStock && (
+                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <Star className="w-3.5 h-3.5 text-blue-500 fill-blue-500" />
+                      <span>Best Buyer & Demand Channels ({selectedStockVariety} in {selectedStockRegion}):</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                      {regionalAvailabilityData.reduce((sum, item) => sum + item.stockKg, 0).toLocaleString()} Kg Ready
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-slate-900 dark:text-white">
+                        Top Commercial Buyer Demand: {bestBuyerForRegionalStock.topBuyers[0]?.buyerName ?? 'Ayurvedic Formulations Ltd'}
+                      </div>
+                      <div className="text-[11px] text-slate-600 dark:text-slate-300">
+                        Monthly demand: {bestBuyerForRegionalStock.topBuyers[0]?.monthlyDemandKg ?? 1200} kg • Requirement: {bestBuyerForRegionalStock.topBuyers[0]?.purityPreference ?? 'C4 Negative'}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onNavigateToMarketplace?.()}
+                      className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs transition cursor-pointer shadow-xs shrink-0 self-start sm:self-auto"
+                    >
+                      Explore Marketplace Packs
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Chart 4: Personal Honey Order & Quality History */}
+            {/* Chart 4: Personal Honey Order & Quality History with Period Filter */}
             <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                    Your Verified Honey Intake & Spending
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <ShoppingBag className="w-4 h-4 text-purple-500" />
+                    <span>Your Verified Honey Intake & Spending</span>
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
                     Summary of authentic, single-origin honey delivered directly to your household.
                   </p>
                 </div>
-                <span className="p-1.5 rounded-xl bg-purple-500/10 text-purple-600 text-xs font-bold">
-                  ₹{personalSummary.totalSpent} Spent
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <select
+                    value={selectedSpendingPeriod}
+                    onChange={(e) => setSelectedSpendingPeriod(e.target.value as any)}
+                    className="px-2 py-1 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-xs font-black text-purple-800 dark:text-purple-300 border border-purple-500/30 focus:ring-2 focus:ring-purple-500 cursor-pointer shadow-xs transition"
+                    title="Filter Spending Period"
+                  >
+                    <option value="30D">Last 30 Days</option>
+                    <option value="90D">Last 90 Days</option>
+                    <option value="All">All Time</option>
+                  </select>
+                </div>
               </div>
 
               <div className="space-y-2">

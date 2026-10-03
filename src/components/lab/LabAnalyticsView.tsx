@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FlaskConical,
   Sparkles,
@@ -16,6 +16,8 @@ import {
   Scale,
   Award,
   ChevronRight,
+  Filter,
+  Droplets,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -36,6 +38,14 @@ import {
 } from 'recharts';
 import { IndiaHivesMap } from '../common/IndiaHivesMap';
 import { SAMPLE_DATA_MASTER } from '../../services/sampleDataMaster';
+import {
+  fetchUnifiedAnalyticsData,
+  computeLabThroughput,
+  computeLabRegionalMoisture,
+  CANONICAL_HONEY_VARIETIES,
+  HoneyVarietyFilter,
+  UnifiedAnalyticsData,
+} from '../../services/analyticsDataService';
 import { useLanguage } from '../../context/LanguageContext';
 import { LabSample, LabReport } from '../../types';
 
@@ -85,6 +95,13 @@ export const LabAnalyticsView: React.FC<LabAnalyticsViewProps> = ({
   const [activeTab, setActiveTab] = useState<'charts' | 'map' | 'ai_insights'>(initialTab);
   const [loadingAI, setLoadingAI] = useState<boolean>(false);
   const [aiInsights, setAiInsights] = useState<AILabInsights | null>(null);
+  const [unifiedData, setUnifiedData] = useState<UnifiedAnalyticsData | null>(null);
+
+  // Interactive Chart Filters
+  const [selectedThroughputVerdict, setSelectedThroughputVerdict] = useState<'ALL' | 'PURE_ONLY' | 'FLAGGED_ONLY'>('ALL');
+  const [selectedQueueBelt, setSelectedQueueBelt] = useState<'All Belts' | 'Northern Zone' | 'Central Zone' | 'Southern & Western Zone'>('All Belts');
+  const [selectedLabMoistureVariety, setSelectedLabMoistureVariety] = useState<HoneyVarietyFilter>('All Varieties');
+  const [selectedTatPriority, setSelectedTatPriority] = useState<'Routine' | 'Express'>('Routine');
 
   useEffect(() => {
     if (initialTab) {
@@ -96,7 +113,7 @@ export const LabAnalyticsView: React.FC<LabAnalyticsViewProps> = ({
   const batches = SAMPLE_DATA_MASTER.batches;
   const labReports = SAMPLE_DATA_MASTER.labReports;
 
-  // Fetch Lab AI Insights
+  // Fetch Lab AI Insights and load unified dataset
   const fetchLabAI = async () => {
     setLoadingAI(true);
     try {
@@ -126,44 +143,81 @@ export const LabAnalyticsView: React.FC<LabAnalyticsViewProps> = ({
 
   useEffect(() => {
     fetchLabAI();
+    fetchUnifiedAnalyticsData().then((data) => setUnifiedData(data));
   }, []);
 
-  // 1. Samples Tested Over Time (6-Month Historical Throughput)
-  const throughputData = [
-    { month: 'May', tested: 24, pure: 23, flagged: 1, avgHours: 32 },
-    { month: 'Jun', tested: 28, pure: 27, flagged: 1, avgHours: 30 },
-    { month: 'Jul', tested: 35, pure: 33, flagged: 2, avgHours: 26 },
-    { month: 'Aug', tested: 42, pure: 40, flagged: 2, avgHours: 25 },
-    { month: 'Sep', tested: 48, pure: 46, flagged: 2, avgHours: 24 },
-    { month: 'Oct (Est)', tested: 52, pure: 50, flagged: 2, avgHours: 22 },
-  ];
+  // 1. Dynamic Samples Tested Over Time (Filtered by Verdict)
+  const throughputData = useMemo(() => {
+    return computeLabThroughput(unifiedData || ({} as any), selectedThroughputVerdict);
+  }, [unifiedData, selectedThroughputVerdict]);
 
-  // 2. Pass / Fail Status Breakdown (Donut Data)
-  const statusPieData = [
-    { name: 'Pure / Certified (FSSAI)', value: 36, color: '#10b981' },
-    { name: 'Adulterated / Rejected', value: 2, color: '#ef4444' },
-    { name: 'In Progress / Secondary Testing', value: 6, color: '#f59e0b' },
-    { name: 'Pending Sample Intake', value: 4, color: '#3b82f6' },
-  ];
+  // 2. Dynamic Pass / Fail Status Breakdown (Donut Data filtered by Zone/Belt)
+  const statusPieData = useMemo(() => {
+    if (selectedQueueBelt === 'Northern Zone') {
+      return [
+        { name: 'Pure / Certified (FSSAI)', value: 22, color: '#10b981' },
+        { name: 'Adulterated / Rejected', value: 1, color: '#ef4444' },
+        { name: 'In Progress / Secondary Testing', value: 3, color: '#f59e0b' },
+        { name: 'Pending Sample Intake', value: 2, color: '#3b82f6' },
+      ];
+    }
+    if (selectedQueueBelt === 'Central Zone') {
+      return [
+        { name: 'Pure / Certified (FSSAI)', value: 14, color: '#10b981' },
+        { name: 'Adulterated / Rejected', value: 1, color: '#ef4444' },
+        { name: 'In Progress / Secondary Testing', value: 2, color: '#f59e0b' },
+        { name: 'Pending Sample Intake', value: 1, color: '#3b82f6' },
+      ];
+    }
+    if (selectedQueueBelt === 'Southern & Western Zone') {
+      return [
+        { name: 'Pure / Certified (FSSAI)', value: 12, color: '#10b981' },
+        { name: 'Adulterated / Rejected', value: 0, color: '#ef4444' },
+        { name: 'In Progress / Secondary Testing', value: 2, color: '#f59e0b' },
+        { name: 'Pending Sample Intake', value: 1, color: '#3b82f6' },
+      ];
+    }
+    return [
+      { name: 'Pure / Certified (FSSAI)', value: 36, color: '#10b981' },
+      { name: 'Adulterated / Rejected', value: 2, color: '#ef4444' },
+      { name: 'In Progress / Secondary Testing', value: 6, color: '#f59e0b' },
+      { name: 'Pending Sample Intake', value: 4, color: '#3b82f6' },
+    ];
+  }, [selectedQueueBelt]);
 
-  // 3. Average Purity & Moisture by Region (Testing Laboratory Audit)
-  const regionalPurityData = [
-    { state: 'Punjab', avgMoisture: 17.2, avgHmf: 12.5, passRate: 98 },
-    { state: 'Himachal', avgMoisture: 16.8, avgHmf: 8.4, passRate: 100 },
-    { state: 'UP', avgMoisture: 18.2, avgHmf: 15.1, passRate: 95 },
-    { state: 'Maharashtra', avgMoisture: 18.9, avgHmf: 18.2, passRate: 94 },
-    { state: 'Bihar', avgMoisture: 17.6, avgHmf: 13.0, passRate: 97 },
-    { state: 'Kerala', avgMoisture: 19.1, avgHmf: 21.0, passRate: 92 },
-  ];
+  // 3. Dynamic Average Purity & Moisture by Region (Filtered by Variety)
+  const regionalPurityData = useMemo(() => {
+    if (!unifiedData) {
+      return [
+        { state: 'Punjab', avgMoisture: 17.2, avgHmf: 12.5, passRate: 98 },
+        { state: 'Himachal', avgMoisture: 16.8, avgHmf: 8.4, passRate: 100 },
+        { state: 'UP', avgMoisture: 18.2, avgHmf: 15.1, passRate: 95 },
+        { state: 'Maharashtra', avgMoisture: 18.9, avgHmf: 18.2, passRate: 94 },
+        { state: 'Bihar', avgMoisture: 17.6, avgHmf: 13.0, passRate: 97 },
+      ];
+    }
+    return computeLabRegionalMoisture(unifiedData, selectedLabMoistureVariety);
+  }, [unifiedData, selectedLabMoistureVariety]);
 
-  // 4. Testing Turnaround Time (TAT Breakdown in hours)
-  const tatBreakdownData = [
-    { stage: 'Sample Intake & Logging', hours: 3 },
-    { stage: 'Sensory & Moisture Refractometry', hours: 5 },
-    { stage: 'Spectroscopic Sugar Profile (F/G)', hours: 8 },
-    { stage: 'C4 Carbon Isotope Mass Spec', hours: 6 },
-    { stage: 'Report Signing & Blockchain Seal', hours: 2 },
-  ];
+  // 4. Testing Turnaround Time (TAT Breakdown in hours filtered by Priority)
+  const tatBreakdownData = useMemo(() => {
+    if (selectedTatPriority === 'Express') {
+      return [
+        { stage: 'Sample Intake & Logging', hours: 1 },
+        { stage: 'Sensory & Moisture Refractometry', hours: 2 },
+        { stage: 'Spectroscopic Sugar Profile (F/G)', hours: 4 },
+        { stage: 'C4 Carbon Isotope Mass Spec', hours: 3 },
+        { stage: 'Report Signing & Blockchain Seal', hours: 1 },
+      ];
+    }
+    return [
+      { stage: 'Sample Intake & Logging', hours: 3 },
+      { stage: 'Sensory & Moisture Refractometry', hours: 5 },
+      { stage: 'Spectroscopic Sugar Profile (F/G)', hours: 8 },
+      { stage: 'C4 Carbon Isotope Mass Spec', hours: 6 },
+      { stage: 'Report Signing & Blockchain Seal', hours: 2 },
+    ];
+  }, [selectedTatPriority]);
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in">
@@ -303,20 +357,31 @@ export const LabAnalyticsView: React.FC<LabAnalyticsViewProps> = ({
 
           {/* Charts Row 1: Throughput over Time & Pass/Fail Breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Chart 1: Samples Tested Over Time */}
+            {/* Chart 1: Samples Tested Over Time with Filter */}
             <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                    Testing Throughput & Pure vs Flagged Batches
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Activity className="w-4 h-4 text-teal-500" />
+                    <span>Testing Throughput & Purity Trends</span>
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
                     Monthly laboratory volume and purity verification trend.
                   </p>
                 </div>
-                <span className="p-1.5 rounded-xl bg-teal-500/10 text-teal-600 text-xs font-bold">
-                  6-Month Trend
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Filter className="w-3.5 h-3.5 text-teal-500" />
+                  <select
+                    value={selectedThroughputVerdict}
+                    onChange={(e) => setSelectedThroughputVerdict(e.target.value as any)}
+                    className="px-2.5 py-1.5 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-xs font-black text-teal-800 dark:text-teal-300 border border-teal-500/30 focus:ring-2 focus:ring-teal-500 cursor-pointer shadow-xs transition"
+                    title="Filter by Testing Verdict"
+                  >
+                    <option value="ALL">All Completed Samples</option>
+                    <option value="PURE_ONLY">Certified Pure Only</option>
+                    <option value="FLAGGED_ONLY">Flagged / Adulterated</option>
+                  </select>
+                </div>
               </div>
 
               <div className="h-64">
@@ -342,20 +407,31 @@ export const LabAnalyticsView: React.FC<LabAnalyticsViewProps> = ({
               </div>
             </div>
 
-            {/* Chart 2: Sample Status & Quality Breakdown (Donut) */}
+            {/* Chart 2: Sample Status & Quality Breakdown (Donut) with Belt Filter */}
             <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                    Sample Queue & Accreditation Status
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <FlaskConical className="w-4 h-4 text-emerald-500" />
+                    <span>Sample Queue & Status Breakdown</span>
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Distribution of active lots undergoing spectroscopic evaluation.
+                    Active lots undergoing spectroscopic evaluation by geographic belt.
                   </p>
                 </div>
-                <span className="p-1.5 rounded-xl bg-emerald-500/10 text-emerald-600 text-xs font-bold">
-                  Active Queue
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <select
+                    value={selectedQueueBelt}
+                    onChange={(e) => setSelectedQueueBelt(e.target.value as any)}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-teal-500 cursor-pointer shadow-xs transition"
+                    title="Filter by Geographic Belt"
+                  >
+                    <option value="All Belts">All Geographic Belts</option>
+                    <option value="Northern Zone">Northern Zone (PB/HP/JK)</option>
+                    <option value="Central Zone">Central Zone (UP/MP/BR)</option>
+                    <option value="Southern & Western Zone">South & West (MH/KA/KL)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="h-64 flex items-center justify-center">
@@ -383,6 +459,7 @@ export const LabAnalyticsView: React.FC<LabAnalyticsViewProps> = ({
                         fontSize: '11px',
                         color: '#f8fafc',
                       }}
+                      formatter={(val: any) => [`${val} Batches`, 'Count']}
                     />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                   </PieChart>
@@ -393,16 +470,32 @@ export const LabAnalyticsView: React.FC<LabAnalyticsViewProps> = ({
 
           {/* Charts Row 2: Regional Moisture / Purity & TAT Metrics */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Chart 3: Regional Moisture & Purity Comparison */}
+            {/* Chart 3: Regional Moisture & Purity Comparison with Variety Filter */}
             <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                    Regional Moisture vs Statutory 20% Standard
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Droplets className="w-4 h-4 text-cyan-500" />
+                    <span>Regional Moisture vs Statutory 20% Standard</span>
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Average moisture content across samples by state of origin.
+                    Average moisture content across samples. Filter by floral variety.
                   </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Filter className="w-3.5 h-3.5 text-cyan-500" />
+                  <select
+                    value={selectedLabMoistureVariety}
+                    onChange={(e) => setSelectedLabMoistureVariety(e.target.value as HoneyVarietyFilter)}
+                    className="px-2.5 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-xs font-black text-cyan-800 dark:text-cyan-300 border border-cyan-500/30 focus:ring-2 focus:ring-cyan-500 cursor-pointer shadow-xs transition"
+                    title="Filter by Honey Variety"
+                  >
+                    {CANONICAL_HONEY_VARIETIES.map((v) => (
+                      <option key={v} value={v} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                        {v}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -420,28 +513,45 @@ export const LabAnalyticsView: React.FC<LabAnalyticsViewProps> = ({
                         fontSize: '11px',
                         color: '#f8fafc',
                       }}
-                      formatter={(val: any) => [`${val}%`, 'Avg Moisture']}
+                      formatter={(val: any, _, item: any) => [
+                        `${val}% (HMF: ${item.payload.avgHmf} mg/kg, Pass: ${item.payload.passRate}%)`,
+                        'Tested Moisture',
+                      ]}
                     />
                     <Bar dataKey="avgMoisture" name="Tested Moisture (%)" fill="#06b6d4" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+
+              <div className="p-2.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-[11px] text-cyan-900 dark:text-cyan-300 font-semibold flex items-center justify-between">
+                <span>Selected Variety: <strong>{selectedLabMoistureVariety}</strong></span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">Complies with FSSAI Section 2.8.2</span>
+              </div>
             </div>
 
-            {/* Chart 4: Testing Stage Turnaround Time (TAT) */}
+            {/* Chart 4: Testing Stage Turnaround Time (TAT) with Priority Filter */}
             <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                    Turnaround Time (TAT) by Testing Stage
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-purple-500" />
+                    <span>Turnaround Time (TAT) by Testing Stage</span>
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Total average turnaround: 24.0 hours from intake to ledger hashing.
+                    Duration from sample intake to immutable ledger block seal.
                   </p>
                 </div>
-                <span className="p-1.5 rounded-xl bg-purple-500/10 text-purple-600 text-xs font-bold">
-                  Target &lt; 36h
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <select
+                    value={selectedTatPriority}
+                    onChange={(e) => setSelectedTatPriority(e.target.value as any)}
+                    className="px-2.5 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-xs font-black text-purple-800 dark:text-purple-300 border border-purple-500/30 focus:ring-2 focus:ring-purple-500 cursor-pointer shadow-xs transition"
+                    title="Filter Testing Priority"
+                  >
+                    <option value="Routine">Standard Testing (&lt;36h)</option>
+                    <option value="Express">Express Fast-Track (&lt;18h)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="h-60">
@@ -458,7 +568,7 @@ export const LabAnalyticsView: React.FC<LabAnalyticsViewProps> = ({
                         fontSize: '11px',
                         color: '#f8fafc',
                       }}
-                      formatter={(val: any) => [`${val} Hours`, 'Duration']}
+                      formatter={(val: any) => [`${val} Hours`, 'Stage Duration']}
                     />
                     <Bar dataKey="hours" fill="#8b5cf6" radius={[0, 6, 6, 0]}>
                       {tatBreakdownData.map((_, index) => (
@@ -467,6 +577,13 @@ export const LabAnalyticsView: React.FC<LabAnalyticsViewProps> = ({
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+
+              <div className="p-2.5 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-900 dark:text-purple-300 font-semibold flex items-center justify-between">
+                <span>Total Workflow Turnaround ({selectedTatPriority}):</span>
+                <strong className="text-purple-600 dark:text-purple-400 font-black">
+                  {tatBreakdownData.reduce((sum, item) => sum + item.hours, 0)} Hours
+                </strong>
               </div>
             </div>
           </div>

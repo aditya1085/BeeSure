@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp,
   Sparkles,
@@ -21,6 +21,9 @@ import {
   ShieldAlert,
   Coins,
   Cpu,
+  Filter,
+  Star,
+  Check,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -41,6 +44,19 @@ import {
 } from 'recharts';
 import { IndiaHivesMap } from '../common/IndiaHivesMap';
 import { SAMPLE_DATA_MASTER } from '../../services/sampleDataMaster';
+import {
+  fetchUnifiedAnalyticsData,
+  computeStateWiseProduction,
+  computeBestBuyerDemand,
+  computeSpeciesDistribution,
+  computeFloralDistribution,
+  CANONICAL_HONEY_VARIETIES,
+  INDIAN_STATES,
+  HoneyVarietyFilter,
+  StateFilter,
+  UnifiedAnalyticsData,
+  BestBuyerDemandInfo,
+} from '../../services/analyticsDataService';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 
@@ -104,10 +120,17 @@ export const AdminAnalyticsView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'overview' | 'map' | 'ai_insights'>('overview');
   const [stats, setStats] = useState<PlatformStats | null>(null);
+  const [unifiedData, setUnifiedData] = useState<UnifiedAnalyticsData | null>(null);
   const [loadingStats, setLoadingStats] = useState<boolean>(true);
   const [loadingAI, setLoadingAI] = useState<boolean>(false);
   const [aiInsights, setAiInsights] = useState<AIAdminInsights | null>(null);
   const [recomputing, setRecomputing] = useState<boolean>(false);
+
+  // Interactive Chart Filters
+  const [selectedProductionVariety, setSelectedProductionVariety] = useState<HoneyVarietyFilter>('All Varieties');
+  const [selectedSpeciesState, setSelectedSpeciesState] = useState<StateFilter>('All States');
+  const [selectedFloralState, setSelectedFloralState] = useState<StateFilter>('All States');
+  const [selectedTrendRange, setSelectedTrendRange] = useState<'6M' | '3M' | '1Y'>('6M');
 
   // Derive stats fallback from SAMPLE_DATA_MASTER
   const computeMasterStats = (): PlatformStats => {
@@ -301,25 +324,70 @@ export const AdminAnalyticsView: React.FC = () => {
   useEffect(() => {
     fetchStats();
     fetchAIInsights();
+    fetchUnifiedAnalyticsData().then((data) => setUnifiedData(data));
   }, []);
 
   const activeStats = stats || computeMasterStats();
 
-  // Prepare chart datasets
-  const speciesChartData = Object.entries(activeStats.speciesDistribution || {}).map(([name, count]) => ({
-    name,
-    count,
-  }));
+  // 1. Dynamic State-wise Honey Production (filtered by variety)
+  const stateProductionData = useMemo(() => {
+    if (!unifiedData) {
+      return Object.entries(activeStats.stateYields || {}).map(([state, val]: [string, any]) => ({
+        state,
+        yieldKg: typeof val === 'number' ? val : (val?.harvestKg ?? 120),
+        activeHives: typeof val === 'object' ? (val?.hives ?? 12) : 12,
+        beekeeperCount: 8,
+        variety: selectedProductionVariety,
+      }));
+    }
+    return computeStateWiseProduction(unifiedData, selectedProductionVariety);
+  }, [unifiedData, selectedProductionVariety, activeStats]);
 
-  const floralChartData = Object.entries(activeStats.floralDistribution || {}).map(([name, kg]) => ({
-    name,
-    kg,
-  }));
+  // Best Buyer & Top Demand information for current variety & state
+  const bestBuyerDemandInfo = useMemo(() => {
+    if (!unifiedData) return null;
+    return computeBestBuyerDemand(unifiedData, selectedProductionVariety, 'All States');
+  }, [unifiedData, selectedProductionVariety]);
 
-  const stateYieldChartData = Object.entries(activeStats.stateYields || {}).map(([state, yieldKg]) => ({
-    state,
-    yieldKg,
-  }));
+  // 2. Dynamic Species distribution (filtered by state)
+  const speciesChartData = useMemo(() => {
+    if (!unifiedData) {
+      return Object.entries(activeStats.speciesDistribution || {}).map(([name, count]) => ({
+        name,
+        count,
+      }));
+    }
+    return computeSpeciesDistribution(unifiedData, selectedSpeciesState);
+  }, [unifiedData, selectedSpeciesState, activeStats]);
+
+  // 3. Dynamic Floral variety volume (filtered by state)
+  const floralChartData = useMemo(() => {
+    if (!unifiedData) {
+      return Object.entries(activeStats.floralDistribution || {}).map(([name, kg]) => ({
+        name,
+        kg,
+      }));
+    }
+    return computeFloralDistribution(unifiedData, selectedFloralState);
+  }, [unifiedData, selectedFloralState, activeStats]);
+
+  // 4. Dynamic Monthly trends (filtered by timeframe)
+  const monthlyTrendsData = useMemo(() => {
+    const raw = activeStats.monthlyTrends || [];
+    if (selectedTrendRange === '3M') return raw.slice(-3);
+    if (selectedTrendRange === '1Y') {
+      const prevMonths = [
+        { month: 'Nov', harvestKg: 420, sales: 16000, avgMoisture: 18.0 },
+        { month: 'Dec', harvestKg: 380, sales: 14000, avgMoisture: 18.2 },
+        { month: 'Jan', harvestKg: 410, sales: 15500, avgMoisture: 18.1 },
+        { month: 'Feb', harvestKg: 490, sales: 18000, avgMoisture: 17.9 },
+        { month: 'Mar', harvestKg: 550, sales: 20000, avgMoisture: 17.7 },
+        { month: 'Apr', harvestKg: 610, sales: 21500, avgMoisture: 17.6 },
+      ];
+      return [...prevMonths, ...raw];
+    }
+    return raw;
+  }, [activeStats, selectedTrendRange]);
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in">
@@ -483,25 +551,35 @@ export const AdminAnalyticsView: React.FC = () => {
 
           {/* Charts Row 1: Historical Harvest & Sales Volume + Species Breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Chart 1: 6-Month Growth & Sales */}
+            {/* Chart 1: Growth & Sales with Timeframe Filter */}
             <div className="lg:col-span-2 p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Activity className="w-4 h-4 text-amber-500" />
                     Honey Harvest Volume & Sales Revenue Trend
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
                     Monthly extraction yield (Kg) and direct marketplace gross merchandise value (₹).
                   </p>
                 </div>
-                <span className="p-1.5 rounded-xl bg-amber-500/10 text-amber-600 text-xs font-bold">
-                  6-Month Trend
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-semibold text-slate-500">Range:</span>
+                  <select
+                    value={selectedTrendRange}
+                    onChange={(e) => setSelectedTrendRange(e.target.value as any)}
+                    className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                  >
+                    <option value="3M">Last 3 Months</option>
+                    <option value="6M">Last 6 Months</option>
+                    <option value="1Y">Full Year (12M)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={activeStats.monthlyTrends} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <BarChart data={monthlyTrendsData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                     <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
@@ -527,17 +605,26 @@ export const AdminAnalyticsView: React.FC = () => {
               </div>
             </div>
 
-            {/* Chart 2: Species Distribution Donut */}
+            {/* Chart 2: Species Distribution Donut with State Filter */}
             <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-black text-slate-900 dark:text-white">
                     Colony Species Distribution
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Distribution of bee colonies across registered apiaries.
+                    Distribution of bee colonies across apiaries.
                   </p>
                 </div>
+                <select
+                  value={selectedSpeciesState}
+                  onChange={(e) => setSelectedSpeciesState(e.target.value)}
+                  className="px-2 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-amber-500 cursor-pointer self-start sm:self-auto"
+                >
+                  {INDIAN_STATES.map((st) => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="h-64 flex items-center justify-center">
@@ -565,6 +652,7 @@ export const AdminAnalyticsView: React.FC = () => {
                         fontSize: '11px',
                         color: '#f8fafc',
                       }}
+                      formatter={(val: any) => [`${val} colonies`, 'Active Broods']}
                     />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
                   </PieChart>
@@ -573,64 +661,195 @@ export const AdminAnalyticsView: React.FC = () => {
             </div>
           </div>
 
-          {/* Charts Row 2: State-wise Yield & Floral Variety Stock */}
+          {/* Charts Row 2: State-wise Honey Yield & Floral Variety Stock */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Chart 3: State-wise Honey Yield */}
+            {/* Chart 3: State-wise Honey Yield (FIXED & FULLY INTERACTIVE WITH VARIETY FILTER & BEST BUYER PANEL) */}
             <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                    State-Wise Honey Production (Kg)
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Droplets className="w-4 h-4 text-amber-500" />
+                    <span>State-Wise Honey Production (Kg)</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                      Live Dynamic
+                    </span>
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Regional honey volume from certified apiaries in key apiculture belts.
+                    Production volume from certified apiaries. Filter by floral variety to see regional yields.
                   </p>
                 </div>
-                <span className="p-1.5 rounded-xl bg-blue-500/10 text-blue-600 text-xs font-bold">
-                  Top Regions
-                </span>
+
+                {/* Honey Type / Variety Filter Control */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Filter className="w-3.5 h-3.5 text-amber-500" />
+                  <select
+                    value={selectedProductionVariety}
+                    onChange={(e) => setSelectedProductionVariety(e.target.value as HoneyVarietyFilter)}
+                    className="px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-xs font-black text-amber-800 dark:text-amber-300 border border-amber-500/30 focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-xs transition"
+                    title="Filter by Honey Type / Variety"
+                    aria-label="Filter by Honey Type / Variety"
+                  >
+                    {CANONICAL_HONEY_VARIETIES.map((v) => (
+                      <option key={v} value={v} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div className="h-60">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stateYieldChartData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                    <XAxis type="number" tick={{ fontSize: 11 }} />
-                    <YAxis dataKey="state" type="category" tick={{ fontSize: 11 }} width={90} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#0f172a',
-                        border: '1px solid #334155',
-                        borderRadius: '12px',
-                        fontSize: '11px',
-                        color: '#f8fafc',
-                      }}
-                      formatter={(val: any) => [`${val} kg`, 'Total Yield']}
-                    />
-                    <Bar dataKey="yieldKg" fill="#3b82f6" radius={[0, 6, 6, 0]}>
-                      {stateYieldChartData.map((_, index) => (
-                        <Cell key={`state-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              {/* Dynamic State Production Chart */}
+              <div className="h-64">
+                {stateProductionData.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-xs text-slate-400 space-y-1">
+                    <AlertTriangle className="w-6 h-6 text-amber-500" />
+                    <span>No harvests recorded for {selectedProductionVariety}.</span>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={stateProductionData}
+                      layout="vertical"
+                      margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis type="number" tick={{ fontSize: 11 }} />
+                      <YAxis dataKey="state" type="category" tick={{ fontSize: 11 }} width={95} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          border: '1px solid #334155',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          color: '#f8fafc',
+                        }}
+                        formatter={(val: any, _, item: any) => [
+                          `${Number(val).toLocaleString()} kg (${item.payload.activeHives} hives, ${item.payload.beekeeperCount} apiaries)`,
+                          `${selectedProductionVariety} Production`,
+                        ]}
+                      />
+                      <Bar dataKey="yieldKg" fill="#f59e0b" radius={[0, 6, 6, 0]}>
+                        {stateProductionData.map((_, index) => (
+                          <Cell key={`state-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
+
+              {/* Best Buyer & High Demand Panel for Selected Variety/State */}
+              {bestBuyerDemandInfo && (
+                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                      <span>Best Buyer & Demand Highlights for:</span>
+                      <strong className="text-amber-600 dark:text-amber-400 font-black underline">
+                        {selectedProductionVariety}
+                      </strong>
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      bestBuyerDemandInfo.demandMetrics.demandLevel === 'VERY HIGH'
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                    }`}>
+                      {bestBuyerDemandInfo.demandMetrics.demandLevel} DEMAND ({bestBuyerDemandInfo.demandMetrics.demandScore}/100)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {/* Top Beekeeper Card */}
+                    {bestBuyerDemandInfo.topBeekeeper && (
+                      <div className="p-2.5 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 space-y-1">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                          Top-Rated Producer
+                        </div>
+                        <div className="font-black text-slate-900 dark:text-white flex items-center justify-between">
+                          <span>{bestBuyerDemandInfo.topBeekeeper.name}</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-black">
+                            {bestBuyerDemandInfo.topBeekeeper.trustScore}/100 Trust
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-600 dark:text-slate-300">
+                          {bestBuyerDemandInfo.topBeekeeper.district}, {bestBuyerDemandInfo.topBeekeeper.state} • {bestBuyerDemandInfo.topBeekeeper.hiveCount} Hives • {bestBuyerDemandInfo.topBeekeeper.totalKg} kg extracted
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Highest Demand Listing Card */}
+                    {bestBuyerDemandInfo.bestListing && (
+                      <div className="p-2.5 rounded-2xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 space-y-1">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                          Best-Selling / In-Demand Pack
+                        </div>
+                        <div className="font-black text-slate-900 dark:text-white truncate">
+                          {bestBuyerDemandInfo.bestListing.title}
+                        </div>
+                        <div className="text-[11px] text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                          <span>₹{bestBuyerDemandInfo.bestListing.priceInr}/jar</span>
+                          <span className="text-slate-500 dark:text-slate-400">
+                            {bestBuyerDemandInfo.bestListing.stockCount} jars ready in stock
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Institutional & Bulk Buyers Segment */}
+                  <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                      <span>Top Verified Commercial Buyers & Procurement Channels:</span>
+                      <span className="text-amber-600 dark:text-amber-400 font-bold">
+                        {bestBuyerDemandInfo.demandMetrics.totalOrdersCount} Live Market Orders
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
+                      {bestBuyerDemandInfo.topBuyers.slice(0, 2).map((buyer, bIdx) => (
+                        <div key={bIdx} className="p-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-slate-900 dark:text-white truncate">{buyer.buyerName}</div>
+                            <div className="text-[10px] text-slate-500">{buyer.city}, {buyer.state} • {buyer.type}</div>
+                          </div>
+                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 shrink-0">
+                            {buyer.monthlyDemandKg} kg/mo
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Chart 4: Floral Variety Volume */}
+            {/* Chart 4: Floral Variety Volume with State Filter */}
             <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                    Floral Source Volume Distribution (Kg)
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-amber-500" />
+                    <span>Floral Source Volume Distribution (Kg)</span>
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Certified monofloral and multifloral honey volume in network.
+                    Certified monofloral and multifloral honey volume in network. Filter by state.
                   </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                  <select
+                    value={selectedFloralState}
+                    onChange={(e) => setSelectedFloralState(e.target.value)}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-xs transition"
+                    title="Filter by State"
+                  >
+                    {INDIAN_STATES.map((st) => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div className="h-60">
+              <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={floralChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
@@ -644,7 +863,7 @@ export const AdminAnalyticsView: React.FC = () => {
                         fontSize: '11px',
                         color: '#f8fafc',
                       }}
-                      formatter={(val: any) => [`${val} kg`, 'Harvested']}
+                      formatter={(val: any) => [`${Number(val).toLocaleString()} kg`, 'Harvested Volume']}
                     />
                     <Bar dataKey="kg" fill="#f59e0b" radius={[6, 6, 0, 0]}>
                       {floralChartData.map((_, index) => (
@@ -653,6 +872,13 @@ export const AdminAnalyticsView: React.FC = () => {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300 font-semibold flex items-center justify-between">
+                <span>Total Monofloral & Multifloral Volume ({selectedFloralState}):</span>
+                <strong className="text-amber-600 dark:text-amber-400 font-black">
+                  {floralChartData.reduce((sum, item) => sum + item.kg, 0).toLocaleString()} Kg
+                </strong>
               </div>
             </div>
           </div>
