@@ -3811,13 +3811,30 @@ const serverUsers: Map<string, any> = new Map();
 
 /**
  * GET /api/hives
- * Retrieve all hives (master + runtime added)
+ * Retrieve all hives or filter by specific beekeeperId
  */
-app.get('/api/hives', (_req: Request, res: Response) => {
-  const uniqueHives = Array.from(
+app.get('/api/hives', (req: Request, res: Response) => {
+  const { beekeeperId } = req.query;
+  let uniqueHives = Array.from(
     new Map(Array.from(serverHives.values()).map((h) => [h.hiveId || h.id, h])).values()
   );
+  if (beekeeperId && typeof beekeeperId === 'string') {
+    uniqueHives = uniqueHives.filter((h) => h.beekeeperId === beekeeperId);
+  }
   res.json({ success: true, hives: uniqueHives });
+});
+
+/**
+ * GET /api/harvests
+ * Retrieve all harvests or filter strictly by beekeeperId
+ */
+app.get('/api/harvests', (req: Request, res: Response) => {
+  const { beekeeperId } = req.query;
+  let harvestList = SAMPLE_DATA_MASTER.harvests;
+  if (beekeeperId && typeof beekeeperId === 'string') {
+    harvestList = harvestList.filter((h) => h.beekeeperId === beekeeperId);
+  }
+  res.json({ success: true, harvests: harvestList });
 });
 
 /**
@@ -4478,7 +4495,7 @@ app.post('/api/beekeepers/approve', async (req: Request, res: Response) => {
     }
 
     const nowIso = new Date().toISOString();
-    const finalId = assignedId || beekeeper.beekeeperId || 'B001';
+    const finalId = assignedId || beekeeper.beekeeperId || 'B101';
 
     const updated = {
       ...beekeeper,

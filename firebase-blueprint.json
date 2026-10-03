@@ -75,6 +75,7 @@
         "id": { "type": "string", "maxLength": 128 },
         "hiveId": { "type": "string", "maxLength": 64 },
         "beekeeperId": { "type": "string", "maxLength": 32 },
+        "userId": { "type": "string", "maxLength": 128 },
         "hiveType": { "type": "string", "enum": ["Langstroth", "KTB", "Traditional", "Other"] },
         "colonyType": { "type": "string", "enum": ["Apis cerana indica", "Apis mellifera", "Apis dorsata", "Apis florea", "Stingless"] },
         "area": { "type": "string", "maxLength": 100 },

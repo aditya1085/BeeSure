@@ -10,17 +10,22 @@ import { SAMPLE_DATA_MASTER } from '../../services/sampleDataMaster';
 interface BatchListViewProps {
   onSelectBatch?: (batchId: string) => void;
   initialSelectedBatchId?: string | null;
+  beekeeperId?: string;
 }
 
 export const BatchListView: React.FC<BatchListViewProps> = ({
   onSelectBatch,
   initialSelectedBatchId,
+  beekeeperId,
 }) => {
   const { t } = useLanguage();
   const [batches, setBatches] = useState<BatchRecord[]>(SAMPLE_DATA_MASTER.batches);
   const [loading, setLoading] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [scopeFilter, setScopeFilter] = useState<'MY_BATCHES' | 'ALL_BATCHES'>(
+    beekeeperId ? 'MY_BATCHES' : 'ALL_BATCHES'
+  );
   const [selectedBatch, setSelectedBatch] = useState<BatchRecord | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
@@ -61,6 +66,11 @@ export const BatchListView: React.FC<BatchListViewProps> = ({
   }, [initialSelectedBatchId]);
 
   const filtered = batches.filter((b) => {
+    // Beekeeper scope filtering
+    if (scopeFilter === 'MY_BATCHES' && beekeeperId) {
+      const isMine = b.beekeeperIds?.includes(beekeeperId) || (b as any).beekeeperId === beekeeperId;
+      if (!isMine) return false;
+    }
     const matchesSearch =
       b.batchId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.floralSource.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -135,6 +145,31 @@ export const BatchListView: React.FC<BatchListViewProps> = ({
             Monitor batches through IoT verification, laboratory certification, and retail packaging
           </p>
         </div>
+
+        {beekeeperId && (
+          <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-800/80 p-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-700/60 text-xs">
+            <button
+              onClick={() => setScopeFilter('MY_BATCHES')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                scopeFilter === 'MY_BATCHES'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+              }`}
+            >
+              My Apiary Batches ({beekeeperId})
+            </button>
+            <button
+              onClick={() => setScopeFilter('ALL_BATCHES')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                scopeFilter === 'ALL_BATCHES'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+              }`}
+            >
+              All Platform Batches
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filter & Search Bar */}

@@ -23,9 +23,12 @@ export const HarvestListView: React.FC<HarvestListViewProps> = ({
   onSelectBatch,
 }) => {
   const { t } = useLanguage();
+  const isDemo = beekeeperId === 'B001' || beekeeperId === 'BK-1001';
   const [harvests, setHarvests] = useState<HarvestRecord[]>(() => {
-    const initial = SAMPLE_DATA_MASTER.harvests.filter((h) => h.beekeeperId === beekeeperId);
-    return initial.length > 0 ? initial : SAMPLE_DATA_MASTER.harvests.slice(0, 10);
+    if (isDemo) {
+      return SAMPLE_DATA_MASTER.harvests.filter((h) => h.beekeeperId === beekeeperId);
+    }
+    return [];
   });
   const [loading, setLoading] = useState<boolean>(false);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -44,21 +47,21 @@ export const HarvestListView: React.FC<HarvestListViewProps> = ({
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const list = snapshot.docs.map((doc) => doc.data() as HarvestRecord);
-        if (list.length > 0) {
-          setHarvests(list);
-        }
+        const list = snapshot.docs
+          .map((doc) => doc.data() as HarvestRecord)
+          .filter((h) => h.beekeeperId === beekeeperId);
+        setHarvests(list);
         setLoading(false);
       },
       (err) => {
-        console.warn('Harvests listener fallback (using master dataset):', err);
+        console.warn('Harvests listener fallback:', err);
         const fallbackQ = query(collection(db, 'harvests'), where('beekeeperId', '==', beekeeperId));
         onSnapshot(fallbackQ, (snap) => {
-          const list = snap.docs.map((d) => d.data() as HarvestRecord);
-          if (list.length > 0) {
-            list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            setHarvests(list);
-          }
+          const list = snap.docs
+            .map((d) => d.data() as HarvestRecord)
+            .filter((h) => h.beekeeperId === beekeeperId);
+          list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          setHarvests(list);
           setLoading(false);
         });
       }

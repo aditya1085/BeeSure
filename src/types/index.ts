@@ -73,6 +73,7 @@ export interface HiveRecord {
   id: string;
   hiveId: string; // e.g. HC-UP-B045-H01
   beekeeperId: string;
+  userId?: string;
   hiveType: HiveType;
   colonyType: ColonyType;
   area: string;

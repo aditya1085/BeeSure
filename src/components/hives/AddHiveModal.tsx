@@ -87,22 +87,27 @@ export const AddHiveModal: React.FC<AddHiveModalProps> = ({ isOpen, onClose, onS
     e.preventDefault();
     setErrorMsg(null);
 
-    const bkId = beekeeperProfile?.beekeeperId || 'B001';
+    const bkId = beekeeperProfile?.beekeeperId;
+    if (!bkId) {
+      setErrorMsg('You must have an official approved Beekeeper ID before registering hives.');
+      return;
+    }
     const state = beekeeperProfile?.state || 'Uttar Pradesh';
 
     setIsSubmitting(true);
-    let hiveData: HiveRecord | null = null;
 
     try {
       // 1. Transaction-safe atomic Hive ID generator: HC-[State]-[BeekeeperID]-H[Seq]
       const { hiveId, seq } = await generateHiveId(state, bkId);
 
       const docId = `HIVE_${hiveId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      const nowIso = new Date().toISOString();
 
-      hiveData = {
+      const hiveData: HiveRecord = {
         id: docId,
         hiveId,
         beekeeperId: bkId,
+        userId: currentUser?.uid || beekeeperProfile?.userId || '',
         hiveType,
         colonyType,
         area: area.trim(),
@@ -114,14 +119,14 @@ export const AddHiveModal: React.FC<AddHiveModalProps> = ({ isOpen, onClose, onS
         district: beekeeperProfile?.district || '',
         imageUrl: imageUrl || undefined,
         setupDate,
-        registrationDate: new Date().toISOString(),
+        registrationDate: nowIso,
         expectedProduction: Number(expectedProduction) || 15,
         status: 'Pending Admin Review',
         approvalStatus: 'pending',
         approvalStage: 'STAGE_1_ADMIN_REVIEW',
         isSample: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
       };
 
       // 2. Persist to Backend API & Firestore with local cache guarantee
@@ -196,12 +201,7 @@ export const AddHiveModal: React.FC<AddHiveModalProps> = ({ isOpen, onClose, onS
       onSuccess(hiveData);
     } catch (err) {
       console.error('Failed to create hive:', err);
-      if (hiveData) {
-        setCreatedHive(hiveData);
-        onSuccess(hiveData);
-      } else {
-        setErrorMsg('Failed to initialize hive registration.');
-      }
+      setErrorMsg('Failed to initialize hive registration. Please verify details and try again.');
     } finally {
       setIsSubmitting(false);
     }

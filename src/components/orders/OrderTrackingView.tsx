@@ -47,9 +47,20 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
   onVerifyPack,
 }) => {
   const { t } = useLanguage();
-  const [orders, setOrders] = useState<OrderRecord[]>(SAMPLE_DATA_MASTER.orders);
+  const isDemoConsumer = currentUserId === 'usr_consumer_demo_01' || currentUserId === 'kvJ84GrNobOGxPwZ08MzrCHWrDo1';
+  const [orders, setOrders] = useState<OrderRecord[]>(() => {
+    if (userRole === 'ADMIN' || isDemoConsumer) {
+      return SAMPLE_DATA_MASTER.orders;
+    }
+    return [];
+  });
   const [loading, setLoading] = useState<boolean>(false);
-  const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(SAMPLE_DATA_MASTER.orders[0] || null);
+  const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(() => {
+    if (userRole === 'ADMIN' || isDemoConsumer) {
+      return SAMPLE_DATA_MASTER.orders[0] || null;
+    }
+    return null;
+  });
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
   // Dispatch Update Form
@@ -78,22 +89,29 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const list = snapshot.docs.map((d) => d.data() as OrderRecord);
+        let list = snapshot.docs.map((d) => d.data() as OrderRecord);
+        if (userRole !== 'ADMIN' && currentUserId) {
+          list = list.filter((o) => o.userId === currentUserId);
+        }
         setOrders(list);
         setLoading(false);
         if (list.length > 0 && !selectedOrder) {
           setSelectedOrder(list[0]);
+        } else if (list.length === 0) {
+          setSelectedOrder(null);
         }
       },
       (err) => {
         console.warn('Orders listener fallback:', err);
-        const fallbackQ = collection(db, 'orders');
-        onSnapshot(fallbackQ, (snap) => {
-          const list = snap.docs.map((d) => d.data() as OrderRecord);
-          list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          setOrders(list);
-          setLoading(false);
-        });
+        if (userRole !== 'ADMIN' && currentUserId) {
+          const fallbackQ = query(collection(db, 'orders'), where('userId', '==', currentUserId));
+          onSnapshot(fallbackQ, (snap) => {
+            const list = snap.docs.map((d) => d.data() as OrderRecord).filter((o) => o.userId === currentUserId);
+            list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            setOrders(list);
+            setLoading(false);
+          });
+        }
       }
     );
 

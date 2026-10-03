@@ -46,7 +46,7 @@ function getNextLocalSequence(key: string, step = 1): number {
   try {
     const fullKey = `hc_seq_${key}`;
     const cur = parseInt(localStorage.getItem(fullKey) || '0', 10);
-    const next = isNaN(cur) ? step : cur + step;
+    const next = isNaN(cur) || cur < step ? step : cur + 1;
     localStorage.setItem(fullKey, String(next));
     return next;
   } catch {
@@ -55,7 +55,8 @@ function getNextLocalSequence(key: string, step = 1): number {
 }
 
 /**
- * Generate Beekeeper ID: `B` + zero-padded counter (e.g. B001, B045)
+ * Generate Beekeeper ID: `B` + zero-padded counter (e.g. B101, B102)
+ * Starts from 101 to strictly isolate newly approved beekeepers from demo/sample account (B001 - B006).
  * Executed atomically in a Firestore transaction upon Admin approval, with local fallback.
  */
 export async function generateBeekeeperId(): Promise<{ beekeeperId: string; seq: number }> {
@@ -64,10 +65,10 @@ export async function generateBeekeeperId(): Promise<{ beekeeperId: string; seq:
   try {
     const result = await runTransaction(db, async (transaction) => {
       const counterSnap = await transaction.get(counterRef);
-      let nextSeq = 1;
+      let nextSeq = 101;
       if (counterSnap.exists()) {
         const current = counterSnap.data().current;
-        nextSeq = typeof current === 'number' ? current + 1 : 1;
+        nextSeq = typeof current === 'number' ? Math.max(101, current + 1) : 101;
       }
       transaction.set(counterRef, {
         current: nextSeq,
@@ -79,7 +80,7 @@ export async function generateBeekeeperId(): Promise<{ beekeeperId: string; seq:
     return result;
   } catch (err) {
     console.warn('Counter transaction notice for beekeepers, using local generator:', err);
-    const nextSeq = getNextLocalSequence('beekeepers');
+    const nextSeq = getNextLocalSequence('beekeepers', 101);
     return { beekeeperId: `B${String(nextSeq).padStart(3, '0')}`, seq: nextSeq };
   }
 }

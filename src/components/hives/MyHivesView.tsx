@@ -56,15 +56,22 @@ export const MyHivesView: React.FC = () => {
   }
 
   const bkId = beekeeperProfile.beekeeperId;
+  const isDemoBeekeeper = currentUser?.email === 'beekeeper.demo@honeychain.in' && bkId === 'B001';
 
+  // A brand new Beekeeper's hive list must start completely EMPTY until they add their own hives.
   const [hives, setHives] = useState<HiveRecord[]>(() => {
     let local: HiveRecord[] = [];
     try {
       local = JSON.parse(localStorage.getItem('hc_local_hives') || '[]');
     } catch {}
-    const list = SAMPLE_DATA_MASTER.hives.filter((h) => h.beekeeperId === bkId);
-    const combined = [...local, ...list.filter((h) => !local.some((l) => l.hiveId === h.hiveId))];
-    return combined;
+    // Filter local storage strictly by the logged-in beekeeper's ID
+    const myLocal = local.filter((h) => h.beekeeperId === bkId);
+    // Only pre-populate sample hives if this is explicitly the demo beekeeper account
+    if (isDemoBeekeeper) {
+      const demoHives = SAMPLE_DATA_MASTER.hives.filter((h) => h.beekeeperId === 'B001');
+      return [...myLocal, ...demoHives.filter((d) => !myLocal.some((m) => m.hiveId === d.hiveId))];
+    }
+    return myLocal;
   });
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -79,24 +86,27 @@ export const MyHivesView: React.FC = () => {
   const [stickerHive, setStickerHive] = useState<HiveRecord | null>(null);
 
   useEffect(() => {
+    if (!bkId) return;
+
+    // 1. Fetch hives from Backend API strictly filtered by this beekeeperId
     const fetchApiHives = async () => {
       try {
-        const res = await fetch('/api/hives');
+        const res = await fetch(`/api/hives?beekeeperId=${encodeURIComponent(bkId)}`);
         if (res.ok) {
           const data = await res.json();
           if (data.success && Array.isArray(data.hives)) {
-            const myApiHives = data.hives.filter((h: HiveRecord) => h.beekeeperId === bkId || (!h.beekeeperId && bkId === 'B001'));
-            if (myApiHives.length > 0) {
-              setHives((prev) => {
-                const liveIds = new Set(myApiHives.map((h: HiveRecord) => h.hiveId || h.id));
-                const combined = [
-                  ...myApiHives,
-                  ...prev.filter((h) => !liveIds.has(h.hiveId || h.id)),
-                ];
-                combined.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-                return combined;
-              });
-            }
+            const myApiHives = data.hives.filter((h: HiveRecord) => h.beekeeperId === bkId);
+            setHives((prev) => {
+              // Strictly isolate to only this beekeeper's hives
+              const myPrev = prev.filter((h) => h.beekeeperId === bkId);
+              const liveIds = new Set(myApiHives.map((h: HiveRecord) => h.hiveId || h.id));
+              const combined = [
+                ...myApiHives,
+                ...myPrev.filter((h) => !liveIds.has(h.hiveId || h.id)),
+              ];
+              combined.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+              return combined;
+            });
           }
         }
       } catch (e) {
@@ -107,25 +117,34 @@ export const MyHivesView: React.FC = () => {
     fetchApiHives();
     const interval = setInterval(fetchApiHives, 3000);
 
+    // 2. Real-time Firestore onSnapshot query strictly filtered by beekeeperId
     const q = query(collection(db, 'hives'), where('beekeeperId', '==', bkId));
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
         const list: HiveRecord[] = [];
-        snapshot.forEach((d) => list.push(d.data() as HiveRecord));
+        snapshot.forEach((d) => {
+          const item = d.data() as HiveRecord;
+          if (item.beekeeperId === bkId) {
+            list.push(item);
+          }
+        });
+
         let local: HiveRecord[] = [];
         try {
           local = JSON.parse(localStorage.getItem('hc_local_hives') || '[]');
         } catch {}
+        const myLocal = local.filter((h) => h.beekeeperId === bkId);
+
         const byKey = new Map<string, HiveRecord>();
-        for (const h of SAMPLE_DATA_MASTER.hives.filter((s) => s.beekeeperId === bkId)) {
-          byKey.set(h.hiveId, h);
-        }
-        for (const h of local) {
-          if (h.beekeeperId === bkId || !h.beekeeperId) {
+        if (isDemoBeekeeper) {
+          for (const h of SAMPLE_DATA_MASTER.hives.filter((s) => s.beekeeperId === 'B001')) {
             byKey.set(h.hiveId, h);
           }
+        }
+        for (const h of myLocal) {
+          byKey.set(h.hiveId, h);
         }
         for (const h of list) {
           byKey.set(h.hiveId, h);
@@ -136,15 +155,18 @@ export const MyHivesView: React.FC = () => {
         setLoading(false);
       },
       (err) => {
-        console.warn('MyHivesView listener notice (using master dataset):', err);
+        console.warn('MyHivesView listener notice:', err);
+        let local: HiveRecord[] = [];
         try {
-          const local = JSON.parse(localStorage.getItem('hc_local_hives') || '[]');
-          const list = SAMPLE_DATA_MASTER.hives.filter((h) => h.beekeeperId === bkId);
-          const combined = [...local, ...list.filter((h) => !local.some((l: any) => l.hiveId === h.hiveId))];
-          if (combined.length > 0) {
-            setHives(combined);
-          }
+          local = JSON.parse(localStorage.getItem('hc_local_hives') || '[]');
         } catch {}
+        const myLocal = local.filter((h) => h.beekeeperId === bkId);
+        if (isDemoBeekeeper) {
+          const demoHives = SAMPLE_DATA_MASTER.hives.filter((h) => h.beekeeperId === 'B001');
+          setHives([...myLocal, ...demoHives.filter((d) => !myLocal.some((m) => m.hiveId === d.hiveId))]);
+        } else {
+          setHives(myLocal);
+        }
         setLoading(false);
       }
     );
@@ -153,7 +175,7 @@ export const MyHivesView: React.FC = () => {
       clearInterval(interval);
       unsubscribe();
     };
-  }, [bkId]);
+  }, [bkId, isDemoBeekeeper]);
 
   if (selectedHive) {
     return (

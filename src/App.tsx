@@ -48,7 +48,7 @@ import { CameraCapture, CapturedPhoto } from './components/camera/CameraCapture'
 import { QRScanner } from './components/camera/QRScanner';
 import { AuthModal } from './components/public/AuthModal';
 import { Sparkles, CheckCircle, QrCode, AlertCircle, X, ShieldAlert, Cpu } from 'lucide-react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { HiveRecord, CartItem, HoneyListing } from './types';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -214,24 +214,31 @@ const MainContent: React.FC = () => {
     setCart([]);
   };
 
-  // Fetch hives for beekeeper
+  // Real-time listener for current beekeeper's hives
   React.useEffect(() => {
-    const fetchHives = async () => {
-      if (!beekeeperProfile?.beekeeperId) return;
-      try {
-        const q = query(
-          collection(db, 'hives'),
-          where('beekeeperId', '==', beekeeperProfile.beekeeperId)
-        );
-        const snap = await getDocs(q);
-        const list = snap.docs.map((d) => d.data() as HiveRecord);
+    if (!beekeeperProfile?.beekeeperId) {
+      setMyHives([]);
+      return;
+    }
+    const bkId = beekeeperProfile.beekeeperId;
+    const q = query(
+      collection(db, 'hives'),
+      where('beekeeperId', '==', bkId)
+    );
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        const list = snap.docs
+          .map((d) => d.data() as HiveRecord)
+          .filter((h) => h.beekeeperId === bkId);
         setMyHives(list);
-      } catch (err) {
-        console.warn('Error fetching beekeeper hives:', err);
+      },
+      (err) => {
+        console.warn('Error listening to beekeeper hives:', err);
       }
-    };
-    fetchHives();
-  }, [beekeeperProfile]);
+    );
+    return () => unsubscribe();
+  }, [beekeeperProfile?.beekeeperId]);
 
   // Scan & Camera results notification banner
   const [scanResult, setScanResult] = useState<string | null>(null);
@@ -473,6 +480,7 @@ const MainContent: React.FC = () => {
           <BatchListView
             initialSelectedBatchId={selectedBatchId}
             onSelectBatch={(bId) => setSelectedBatchId(bId)}
+            beekeeperId={beekeeperProfile?.beekeeperId}
           />
         )}
 

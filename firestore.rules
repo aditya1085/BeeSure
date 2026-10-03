@@ -42,6 +42,35 @@ service cloud.firestore {
       return resource != null && resource.data.get('isSample', false) == true;
     }
 
+    function isLab() {
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'LAB') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('labId', '') != '')
+      );
+    }
+
+    function getAuthBeekeeperId() {
+      return exists(/databases/$(database)/documents/beekeepers/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/beekeepers/$(request.auth.uid)).data.get('beekeeperId', '')
+        : (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('beekeeperId', '')
+            : '');
+    }
+
+    function isHiveOwner() {
+      return isSignedIn() && (
+        (resource != null && 'userId' in resource.data && resource.data.userId == request.auth.uid) ||
+        (resource != null && 'beekeeperId' in resource.data && getAuthBeekeeperId() != '' && resource.data.beekeeperId == getAuthBeekeeperId())
+      );
+    }
+
+    function isHarvestOwner() {
+      return isSignedIn() && (
+        (resource != null && 'userId' in resource.data && resource.data.userId == request.auth.uid) ||
+        (resource != null && 'beekeeperId' in resource.data && getAuthBeekeeperId() != '' && resource.data.beekeeperId == getAuthBeekeeperId())
+      );
+    }
+
     // Test connection probe
     match /test/{docId} {
       allow read, write: if true;
@@ -74,12 +103,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Hives
+    // Hives (Strict owner filtering enforced: Beekeepers can only read/list their OWN hives)
     match /hives/{hiveDocId} {
-      allow get, list: if true;
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isAdmin() || isSampleDoc();
+      allow get, list: if isAdmin() || isLab() || isHiveOwner();
+      allow create: if isSignedIn() && (
+        isAdmin() ||
+        request.resource.data.get('userId', '') == request.auth.uid ||
+        (getAuthBeekeeperId() != '' && request.resource.data.get('beekeeperId', '') == getAuthBeekeeperId())
+      );
+      allow update: if isSignedIn() && (isAdmin() || isLab() || isHiveOwner());
+      allow delete: if isAdmin() || (isHiveOwner() && isSampleDoc());
     }
 
     // IoT Devices
@@ -144,10 +177,15 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Harvests (Beekeepers record extracted honey)
+    // Harvests (Beekeepers record extracted honey - strictly isolated to owner)
     match /harvests/{harvestId} {
-      allow get, list: if true;
-      allow create, update: if isSamplePayload() || isSignedIn();
+      allow get, list: if isAdmin() || isHarvestOwner();
+      allow create: if isSamplePayload() || (isSignedIn() && (
+        isAdmin() ||
+        request.resource.data.get('userId', '') == request.auth.uid ||
+        (getAuthBeekeeperId() != '' && request.resource.data.get('beekeeperId', '') == getAuthBeekeeperId())
+      ));
+      allow update: if isAdmin() || isHarvestOwner();
       allow delete: if isAdmin() || isSampleDoc();
     }
 
