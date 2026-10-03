@@ -660,6 +660,111 @@ Provide your findings in strictly valid JSON conforming to the schema with:
   }
 });
 
+// Translation cache for Indian languages
+const TRANSLATION_CACHE = new Map<string, string>();
+
+const INDIAN_LANG_NAMES: Record<string, string> = {
+  hi: 'Hindi (हिन्दी)',
+  bn: 'Bengali (বাংলা)',
+  te: 'Telugu (తెలుగు)',
+  mr: 'Marathi (मराठी)',
+  ta: 'Tamil (தமிழ்)',
+  ur: 'Urdu (اردو)',
+  gu: 'Gujarati (ગુજરાતી)',
+  kn: 'Kannada (ಕನ್ನಡ)',
+  ml: 'Malayalam (മലയാളം)',
+  or: 'Odia (ଓଡ଼ିଆ)',
+  pa: 'Punjabi (ਪੰਜਾਬੀ)',
+  as: 'Assamese (অসমীয়া)',
+};
+
+/**
+ * POST /api/translate
+ * Translates an array of texts into any Indian regional language using Gemini 3.8 Flash
+ */
+app.post('/api/translate', async (req: Request, res: Response) => {
+  const { texts, targetLang = 'hi' } = req.body;
+
+  if (!Array.isArray(texts) || texts.length === 0) {
+    res.status(400).json({ error: 'texts must be a non-empty array of strings' });
+    return;
+  }
+
+  if (targetLang === 'en') {
+    const ident: Record<string, string> = {};
+    for (const t of texts) ident[t] = t;
+    res.json({ translations: ident });
+    return;
+  }
+
+  const langName = INDIAN_LANG_NAMES[targetLang] || targetLang;
+  const result: Record<string, string> = {};
+  const toTranslate: string[] = [];
+
+  for (const text of texts) {
+    if (typeof text !== 'string' || !text.trim()) continue;
+    const cacheKey = `${targetLang}:${text.trim()}`;
+    if (TRANSLATION_CACHE.has(cacheKey)) {
+      result[text] = TRANSLATION_CACHE.get(cacheKey)!;
+    } else {
+      toTranslate.push(text.trim());
+    }
+  }
+
+  if (toTranslate.length === 0) {
+    res.json({ success: true, translations: result, cached: true });
+    return;
+  }
+
+  // Batch translate up to 30 texts per request
+  const batch = toTranslate.slice(0, 30);
+
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const prompt = `You are a professional multilingual translator specializing in Indian languages for agriculture, beekeeping, and e-commerce apps.
+Translate the following English strings into natural, accurate, culturally appropriate ${langName}.
+Keep technical terms, IDs (like B001, HB-..., etc.), brand name "BeeSure", currency "₹", and numbers intact.
+Respond with strictly valid JSON where each key is the original English string and the value is its translation in ${langName}.
+
+Input strings:
+${JSON.stringify(batch, null, 2)}`;
+
+      const aiResponse = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+
+      const parsed = JSON.parse(aiResponse.text || '{}');
+      if (typeof parsed === 'object' && parsed !== null) {
+        for (const [key, val] of Object.entries(parsed)) {
+          if (typeof val === 'string') {
+            result[key] = val;
+            TRANSLATION_CACHE.set(`${targetLang}:${key}`, val);
+          }
+        }
+      }
+    } catch (translateErr) {
+      console.warn('Gemini dynamic translation notice:', translateErr);
+    }
+  }
+
+  // For any items still not translated, default to original
+  for (const text of batch) {
+    if (!result[text]) {
+      result[text] = text;
+    }
+  }
+
+  res.json({
+    success: true,
+    targetLang,
+    translations: result,
+  });
+});
+
 /**
  * POST /api/transcribe-audio
  * Audio transcription powered by Gemini 3.5 Transcribe (gemini-3.5-transcribe)

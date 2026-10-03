@@ -24,9 +24,10 @@ import {
   Mic,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useLanguage } from '../../context/LanguageContext';
+import { useLanguage, INDIAN_LANGUAGES } from '../../context/LanguageContext';
 import { UserRole } from '../../types';
 import { NotificationsBell } from './NotificationsBell';
+import { LanguageSelectorModal } from './LanguageSelectorModal';
 
 interface HeaderProps {
   onOpenAuth: () => void;
@@ -55,6 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [personaMenuOpen, setPersonaMenuOpen] = useState(false);
   const [switchingPersona, setSwitchingPersona] = useState(false);
+  const [isLangModalOpen, setIsLangModalOpen] = useState(false);
 
   const roles: Array<{ role: UserRole; label: string }> = [
     { role: 'CONSUMER', label: t('role.consumer') },
@@ -508,14 +510,17 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Language Switcher */}
+          {/* Multilingual Selector Button (13 Indian Languages) */}
           <button
-            onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-semibold shadow-xs transition"
-            title="Switch Language (English / हिंदी)"
+            onClick={() => setIsLangModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-600/40 text-amber-900 dark:text-amber-200 text-xs font-bold shadow-xs transition group cursor-pointer"
+            title="Select Language / भाषा चुनें (13 Indian Regional Languages)"
           >
-            <Languages className="w-3.5 h-3.5 text-amber-600" />
-            <span>{language === 'en' ? 'EN' : 'हिंदी'}</span>
+            <Languages className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 group-hover:scale-110 transition" />
+            <span className="font-semibold">
+              {INDIAN_LANGUAGES.find((l) => l.code === language)?.nativeName || language.toUpperCase()}
+            </span>
+            <ChevronDown className="w-3 h-3 opacity-60 group-hover:translate-y-0.5 transition" />
           </button>
 
           {/* Instant Persona Switcher Dropdown (Real Auth + Real Firestore User Accounts) */}
@@ -651,6 +656,14 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
       </div>
+
+      {/* Multilingual Selection Dialog */}
+      <LanguageSelectorModal
+        isOpen={isLangModalOpen}
+        onClose={() => setIsLangModalOpen(false)}
+        currentLanguage={language}
+        onSelectLanguage={setLanguage}
+      />
     </header>
   );
 };

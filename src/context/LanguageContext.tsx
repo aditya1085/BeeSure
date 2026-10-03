@@ -1,6 +1,16 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import {
+  SupportedLanguage,
+  INDIAN_LANGUAGES,
+  MULTILINGUAL_DICTIONARY,
+  LanguageInfo,
+} from '../services/indianLanguages';
+import { translateText, queueTranslation } from '../services/domTranslator';
 
-export type Language = 'en' | 'hi';
+export type Language = SupportedLanguage;
+
+export { INDIAN_LANGUAGES };
+export type { LanguageInfo };
 
 interface LanguageContextType {
   language: Language;
@@ -8,7 +18,7 @@ interface LanguageContextType {
   t: (key: string) => string;
 }
 
-const translations: Record<Language, Record<string, string>> = {
+const translations: Partial<Record<Language, Record<string, string>>> = {
   en: {
     // Brand & Header
     'brand.title': 'BeeSure',
@@ -1348,24 +1358,43 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const t = (key: string): string => {
     if (!key) return '';
-    // 1. Check exact key in selected language
-    if (translations[language]?.[key]) {
-      return translations[language][key];
+    // 1. Check multilingual dictionary
+    if (MULTILINGUAL_DICTIONARY[language]?.[key]) {
+      return MULTILINGUAL_DICTIONARY[language][key];
     }
-    // 2. If Hindi, check normalized phrase dictionary and translator
+    // 2. Check exact key in legacy translations map
+    if ((translations as any)[language]?.[key]) {
+      return (translations as any)[language][key];
+    }
+    // 3. If Hindi, check normalized phrase dictionary and translator
     if (language === 'hi') {
       const translated = translateTextToHindi(key);
       if (translated !== key) {
         return translated;
       }
     }
-    // 3. Fallback to English dictionary or key itself
-    return translations.en?.[key] || key;
+    // 4. Translate text via dynamic multilingual translator
+    if (language !== 'en') {
+      const translated = translateText(key, language);
+      if (translated !== key) {
+        return translated;
+      }
+    }
+    // 5. Fallback to English dictionary or key itself
+    return (translations as any).en?.[key] || key;
   };
 
-  // High-performance bidirectional DOM text translator for complete Hindi/English switching
+  // High-performance bidirectional DOM text translator for complete 13-language switching across all pages
   useEffect(() => {
-    const isHindi = language === 'hi';
+    const isEnglish = language === 'en';
+
+    const translateNodeContent = (original: string): string => {
+      if (isEnglish) return original;
+      if (language === 'hi') {
+        return translateTextToHindi(original);
+      }
+      return translateText(original, language);
+    };
 
     const processElement = (node: Node) => {
       if (node.nodeType === Node.TEXT_NODE && node.nodeValue) {
@@ -1373,8 +1402,8 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           originalTextMap.set(node, node.nodeValue);
         }
         const original = originalTextMap.get(node)!;
-        if (isHindi) {
-          const translated = translateTextToHindi(original);
+        if (!isEnglish) {
+          const translated = translateNodeContent(original);
           if (translated !== node.nodeValue) {
             node.nodeValue = translated;
           }
@@ -1401,8 +1430,8 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             originalPlaceholderMap.set(el, el.getAttribute('placeholder') || '');
           }
           const orig = originalPlaceholderMap.get(el)!;
-          if (isHindi) {
-            el.setAttribute('placeholder', translateTextToHindi(orig));
+          if (!isEnglish) {
+            el.setAttribute('placeholder', translateNodeContent(orig));
           } else {
             el.setAttribute('placeholder', orig);
           }
@@ -1414,8 +1443,8 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             originalTitleMap.set(el, el.getAttribute('title') || '');
           }
           const orig = originalTitleMap.get(el)!;
-          if (isHindi) {
-            el.setAttribute('title', translateTextToHindi(orig));
+          if (!isEnglish) {
+            el.setAttribute('title', translateNodeContent(orig));
           } else {
             el.setAttribute('title', orig);
           }

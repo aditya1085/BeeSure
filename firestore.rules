@@ -20,7 +20,8 @@ service cloud.firestore {
           'adityatripathi240815@acropolis.in',
           'admin.honeychain@gmail.com',
           'admin@honeychain.in',
-          'admin.demo@honeychain.in'
+          'admin.demo@honeychain.in',
+          'gdew2202@gmail.com'
         ]
       );
     }
