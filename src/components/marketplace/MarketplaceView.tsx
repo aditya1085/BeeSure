@@ -138,6 +138,8 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
           .filter((l) => !l.status || l.status === 'active');
         if (list.length > 0) {
           setListings(list);
+        } else {
+          setListings(SAMPLE_DATA_MASTER.listings);
         }
         setLoading(false);
       },

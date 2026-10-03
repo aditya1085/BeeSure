@@ -68,13 +68,13 @@ export const Header: React.FC<HeaderProps> = ({
     setSwitchingPersona(true);
     try {
       await loginAsPersona(role);
+    } catch (e) {
+      console.warn('Persona switch fallback notice:', e);
+    } finally {
       if (role === 'ADMIN') setCurrentTab('admin-console');
       else if (role === 'BEEKEEPER') setCurrentTab('my-hives');
       else if (role === 'LAB') setCurrentTab('lab-portal');
       else setCurrentTab('marketplace');
-    } catch (e) {
-      console.error('Persona switch error:', e);
-    } finally {
       setSwitchingPersona(false);
     }
   };

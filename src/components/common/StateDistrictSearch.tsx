@@ -22,6 +22,7 @@ import {
 import { fetchRegionalSearchData, RegionalSearchResult, RegionalLabReportResult } from '../../services/regionalSearchService';
 import { useLanguage } from '../../context/LanguageContext';
 import { IndiaHivesMap } from './IndiaHivesMap';
+import { GoogleMapsGroundingExplorer } from './GoogleMapsGroundingExplorer';
 
 export interface StateDistrictSearchProps {
   role: 'CONSUMER' | 'ADMIN' | 'LAB' | 'BEEKEEPER';
@@ -46,7 +47,7 @@ export const StateDistrictSearch: React.FC<StateDistrictSearchProps> = ({
   const [selectedDistrict, setSelectedDistrict] = useState<string>(initialDistrict);
   const [searchData, setSearchData] = useState<RegionalSearchResult | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'apiaries' | 'batches'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'apiaries' | 'batches' | 'maps-grounding'>('overview');
 
   // Load regional data whenever state or district changes
   const loadData = async (st: string, dist?: string) => {
@@ -338,6 +339,18 @@ export const StateDistrictSearch: React.FC<StateDistrictSearchProps> = ({
         >
           <Boxes className="w-3.5 h-3.5" />
           <span>Regional Batches ({searchData?.batches?.length ?? 0})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('maps-grounding')}
+          className={`px-4 py-2 rounded-xl transition flex items-center gap-1.5 ${
+            activeTab === 'maps-grounding'
+              ? 'bg-amber-500 text-slate-950 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <MapPin className="w-3.5 h-3.5 text-amber-500" />
+          <span>Google Maps Grounding</span>
         </button>
       </div>
 
@@ -642,6 +655,15 @@ export const StateDistrictSearch: React.FC<StateDistrictSearchProps> = ({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tab 4: Google Maps Grounded Honey & Apiary Intelligence */}
+      {activeTab === 'maps-grounding' && (
+        <div className="space-y-4">
+          <GoogleMapsGroundingExplorer
+            initialQuery={`Accredited honey testing laboratories and apiculture resources in ${selectedDistrict ? `${selectedDistrict}, ` : ''}${selectedState}, India`}
+          />
         </div>
       )}
     </div>

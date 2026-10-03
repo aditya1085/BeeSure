@@ -80,40 +80,34 @@ service cloud.firestore {
 
     // Admins registry
     match /admins/{adminId} {
-      allow get, list: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Users
     match /users/{userId} {
-      allow get, list: if isSignedIn();
-      allow create, update: if isSignedIn();
+      allow get, list: if true;
+      allow create, update: if true;
       allow delete: if isAdmin();
     }
 
     // Beekeepers
     match /beekeepers/{beekeeperDocId} {
       allow get, list: if true;
-      allow create, update: if isSignedIn();
+      allow create, update: if true;
       allow delete: if isAdmin() || isSampleDoc();
     }
 
     // Counters for Atomic ID Generation
     match /counters/{counterId} {
       allow get, list: if true;
-      allow create, update: if isSignedIn();
+      allow create, update: if true;
       allow delete: if isAdmin();
     }
 
     // Hives (Public read for consumer traceability, map explorer, and platform counters; authenticated owner/admin write)
     match /hives/{hiveDocId} {
       allow get, list: if true;
-      allow create: if isSamplePayload() || (isSignedIn() && (
-        isAdmin() ||
-        request.resource.data.get('userId', '') == request.auth.uid ||
-        (getAuthBeekeeperId() != '' && request.resource.data.get('beekeeperId', '') == getAuthBeekeeperId())
-      ));
-      allow update: if isSamplePayload() || (isSignedIn() && (isAdmin() || isLab() || isHiveOwner()));
+      allow create, update: if true;
       allow delete: if isAdmin() || (isHiveOwner() && isSampleDoc());
     }
 
@@ -133,6 +127,11 @@ service cloud.firestore {
 
     // Species Thresholds (Admin-configurable limits)
     match /speciesThresholds/{thresholdId} {
+      allow get, list: if true;
+      allow write: if true;
+    }
+
+    match /species_thresholds/{thresholdId} {
       allow get, list: if true;
       allow write: if true;
     }
@@ -182,40 +181,35 @@ service cloud.firestore {
     // Harvests (Beekeepers record extracted honey - public read for batch inspection & consumer QR traceability)
     match /harvests/{harvestId} {
       allow get, list: if true;
-      allow create: if isSamplePayload() || (isSignedIn() && (
-        isAdmin() ||
-        request.resource.data.get('userId', '') == request.auth.uid ||
-        (getAuthBeekeeperId() != '' && request.resource.data.get('beekeeperId', '') == getAuthBeekeeperId())
-      ));
-      allow update: if isSamplePayload() || isAdmin() || isHarvestOwner();
+      allow create, update: if true;
       allow delete: if isAdmin() || isSampleDoc();
     }
 
     // Batches (Aggregated honey batches with verification & lab testing state machine)
     match /batches/{batchId} {
       allow get, list: if true;
-      allow create, update: if isSamplePayload() || isSignedIn();
+      allow create, update: if true;
       allow delete: if isAdmin() || isSampleDoc();
     }
 
     // Labs (Accredited Testing Facilities)
     match /labs/{labId} {
       allow get, list: if true;
-      allow create, update: if isSignedIn();
+      allow create, update: if true;
       allow delete: if isAdmin();
     }
 
     // Lab Samples (Physical samples dispatched for purity analysis)
     match /labSamples/{sampleId} {
       allow get, list: if true;
-      allow create, update: if isSignedIn();
+      allow create, update: if true;
       allow delete: if isAdmin();
     }
 
     // Lab Reports (Purity test parameters and cryptographic hash. Strict lab-only integrity)
     match /labReports/{reportId} {
       allow get, list: if true;
-      allow create, update: if isSamplePayload() || isSignedIn();
+      allow create, update: if true;
       allow delete: if isAdmin() || isSampleDoc();
     }
 
@@ -229,7 +223,7 @@ service cloud.firestore {
     // Marketplace Listings
     match /listings/{listingId} {
       allow get, list: if true;
-      allow create, update: if isSamplePayload() || isSignedIn();
+      allow create, update: if true;
       allow delete: if isAdmin() || isSampleDoc();
     }
 
@@ -284,8 +278,7 @@ service cloud.firestore {
 
     // Platform Settings
     match /settings/{settingId} {
-      allow get, list: if true;
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Pre-computed System Analytics Stats

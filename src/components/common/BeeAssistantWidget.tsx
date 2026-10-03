@@ -12,12 +12,15 @@ import {
   ChevronDown,
   Mic,
   Square,
+  MapPin,
+  ExternalLink,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  mapsLinks?: Array<{ title: string; uri: string; snippets?: string[] }>;
 }
 
 export const BeeAssistantWidget: React.FC = () => {
@@ -121,12 +124,14 @@ export const BeeAssistantWidget: React.FC = () => {
 
   const quickPrompts = {
     en: [
+      'Accredited honey testing labs near me (Google Maps)',
       'What are FSSAI honey purity limits?',
       'Ideal brood chamber temperature?',
       'How to verify jar QR code on blockchain?',
       'Explain 88% direct beekeeper payout',
     ],
     hi: [
+      'गूगल मैप्स पर शहद परीक्षण लैब खोजें',
       'FSSAI शहद शुद्धता के मानक क्या हैं?',
       'छत्ते का आदर्श तापमान और आर्द्रता कितनी होनी चाहिए?',
       'जार का क्यूआर कोड कैसे सत्यापित करें?',
@@ -161,7 +166,10 @@ export const BeeAssistantWidget: React.FC = () => {
 
       const data = await res.json();
       if (data && data.reply) {
-        setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: data.reply, mapsLinks: data.mapsLinks },
+        ]);
       } else {
         throw new Error(data?.error || 'No reply from Madhubot');
       }
@@ -282,7 +290,32 @@ export const BeeAssistantWidget: React.FC = () => {
                       : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-bl-xs border border-slate-200 dark:border-slate-700 shadow-xs whitespace-pre-wrap'
                   }`}
                 >
-                  {m.content}
+                  <div>{m.content}</div>
+
+                  {m.mapsLinks && m.mapsLinks.length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
+                      <div className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-amber-500 shrink-0" />
+                        <span>Google Maps Grounded Locations:</span>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {m.mapsLinks.map((ml, mlIdx) => (
+                          <a
+                            key={mlIdx}
+                            href={ml.uri}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-slate-800 dark:text-slate-100 border border-amber-500/20 text-[10px] flex items-center justify-between transition group"
+                          >
+                            <span className="font-semibold truncate max-w-[210px] group-hover:text-amber-600">
+                              📍 {ml.title}
+                            </span>
+                            <ExternalLink className="w-3 h-3 text-amber-500 shrink-0 ml-1" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

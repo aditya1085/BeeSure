@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { IndiaHivesMap } from '../common/IndiaHivesMap';
+import { GoogleMapsGroundingExplorer } from '../common/GoogleMapsGroundingExplorer';
 import { MapPin, ShieldCheck, Sparkles, ShoppingBag, ArrowRight } from 'lucide-react';
 import { CartItem } from '../../types';
 
@@ -60,6 +61,11 @@ export const ConsumerMapView: React.FC<ConsumerMapViewProps> = ({
 
         <IndiaHivesMap role="CONSUMER" heightClass="h-[600px]" />
       </div>
+
+      {/* Google Maps Grounded Honey Intelligence */}
+      <GoogleMapsGroundingExplorer
+        initialQuery="Find organic beekeeping farms and accredited honey testing centers in India"
+      />
     </div>
   );
 };
