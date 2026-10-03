@@ -1983,25 +1983,27 @@ Only output the JSON object, without markdown quotes or backticks.
 `;
 
     // Resilient generation with model fallback
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-flash-latest'];
+    const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
     let aiResponseText = '';
 
-    for (const model of modelsToTry) {
-      try {
-        const res = await ai.models.generateContent({
-          model,
-          contents: promptText,
-          config: {
-            responseMimeType: 'application/json',
-            temperature: 0.7,
-          },
-        });
-        if (res.text) {
-          aiResponseText = res.text;
-          break;
+    if (process.env.GEMINI_API_KEY) {
+      for (const model of modelsToTry) {
+        try {
+          const res = await ai.models.generateContent({
+            model,
+            contents: promptText,
+            config: {
+              responseMimeType: 'application/json',
+              temperature: 0.7,
+            },
+          });
+          if (res.text) {
+            aiResponseText = res.text;
+            break;
+          }
+        } catch (e: any) {
+          console.warn(`Model ${model} failed for AI Insights:`, e?.message || e);
         }
-      } catch (e: any) {
-        console.warn(`Model ${model} failed for AI Insights:`, e?.message || e);
       }
     }
 
@@ -2100,25 +2102,27 @@ Generate a valid JSON object matching this schema:
 Only output the JSON object, without markdown quotes or backticks.
 `;
 
-    const modelsToTry = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'];
+    const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
     let aiResponseText = '';
 
-    for (const model of modelsToTry) {
-      try {
-        const res = await ai.models.generateContent({
-          model,
-          contents: promptText,
-          config: {
-            responseMimeType: 'application/json',
-            temperature: 0.7,
-          },
-        });
-        if (res.text) {
-          aiResponseText = res.text;
-          break;
+    if (process.env.GEMINI_API_KEY) {
+      for (const model of modelsToTry) {
+        try {
+          const res = await ai.models.generateContent({
+            model,
+            contents: promptText,
+            config: {
+              responseMimeType: 'application/json',
+              temperature: 0.7,
+            },
+          });
+          if (res.text) {
+            aiResponseText = res.text;
+            break;
+          }
+        } catch (e: any) {
+          console.warn(`Model ${model} failed for Consumer AI Insights:`, e?.message || e);
         }
-      } catch (e: any) {
-        console.warn(`Model ${model} failed for Consumer AI Insights:`, e?.message || e);
       }
     }
 
@@ -2233,25 +2237,27 @@ Generate a valid JSON object matching this schema:
 Only output the JSON object, without markdown quotes or backticks.
 `;
 
-    const modelsToTry = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'];
+    const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
     let aiResponseText = '';
 
-    for (const model of modelsToTry) {
-      try {
-        const res = await ai.models.generateContent({
-          model,
-          contents: promptText,
-          config: {
-            responseMimeType: 'application/json',
-            temperature: 0.7,
-          },
-        });
-        if (res.text) {
-          aiResponseText = res.text;
-          break;
+    if (process.env.GEMINI_API_KEY) {
+      for (const model of modelsToTry) {
+        try {
+          const res = await ai.models.generateContent({
+            model,
+            contents: promptText,
+            config: {
+              responseMimeType: 'application/json',
+              temperature: 0.7,
+            },
+          });
+          if (res.text) {
+            aiResponseText = res.text;
+            break;
+          }
+        } catch (e: any) {
+          console.warn(`Model ${model} failed for Lab AI Insights:`, e?.message || e);
         }
-      } catch (e: any) {
-        console.warn(`Model ${model} failed for Lab AI Insights:`, e?.message || e);
       }
     }
 
@@ -2377,25 +2383,27 @@ Formatting:
     ];
 
     // Resilient model try with fallback chain
-    const modelsToTry = ['gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+    const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
     let replyText = '';
 
-    for (const model of modelsToTry) {
-      try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: contents as any,
-          config: {
-            systemInstruction: systemPrompt,
-            temperature: 0.7,
-          },
-        });
-        if (response.text) {
-          replyText = response.text;
-          break;
+    if (process.env.GEMINI_API_KEY) {
+      for (const model of modelsToTry) {
+        try {
+          const response = await ai.models.generateContent({
+            model,
+            contents: contents as any,
+            config: {
+              systemInstruction: systemPrompt,
+              temperature: 0.7,
+            },
+          });
+          if (response.text) {
+            replyText = response.text;
+            break;
+          }
+        } catch (modelErr: any) {
+          console.warn(`Model ${model} failed for Bee Assistant:`, modelErr?.message || modelErr);
         }
-      } catch (modelErr: any) {
-        console.warn(`Model ${model} failed for Bee Assistant:`, modelErr?.message || modelErr);
       }
     }
 

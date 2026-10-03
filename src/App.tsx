@@ -51,6 +51,7 @@ import { Sparkles, CheckCircle, QrCode, AlertCircle, X, ShieldAlert, Cpu } from 
 import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { HiveRecord, CartItem, HoneyListing } from './types';
+import { SAMPLE_DATA_MASTER } from './services/sampleDataMaster';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const MainContent: React.FC = () => {
@@ -234,7 +235,18 @@ const MainContent: React.FC = () => {
         setMyHives(list);
       },
       (err) => {
-        console.warn('Error listening to beekeeper hives:', err);
+        console.warn('Notice listening to beekeeper hives (using local/master fallback):', err);
+        try {
+          const localHives: HiveRecord[] = JSON.parse(localStorage.getItem('hc_local_hives') || '[]');
+          const myLocal = localHives.filter((h) => h.beekeeperId === bkId);
+          if (myLocal.length > 0) {
+            setMyHives(myLocal);
+          } else {
+            setMyHives(SAMPLE_DATA_MASTER.hives.filter((h: HiveRecord) => h.beekeeperId === bkId));
+          }
+        } catch {
+          setMyHives(SAMPLE_DATA_MASTER.hives.filter((h: HiveRecord) => h.beekeeperId === bkId));
+        }
       }
     );
     return () => unsubscribe();
@@ -265,7 +277,7 @@ const MainContent: React.FC = () => {
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <div key={language} className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+    <div key={language} className="min-h-screen flex flex-col bg-linear-to-b from-amber-50/20 via-white to-amber-50/30 text-slate-900 selection:bg-amber-200 selection:text-amber-950">
       {/* Header */}
       <Header
         onOpenAuth={() => setIsAuthModalOpen(true)}

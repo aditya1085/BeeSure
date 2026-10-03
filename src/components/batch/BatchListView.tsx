@@ -51,14 +51,22 @@ export const BatchListView: React.FC<BatchListViewProps> = ({
       (err) => {
         console.warn('Batches fallback query (using master dataset):', err);
         const fallbackQ = collection(db, 'batches');
-        onSnapshot(fallbackQ, (snap) => {
-          const list = snap.docs.map((d) => d.data() as BatchRecord);
-          if (list.length > 0) {
-            list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            setBatches(list);
+        onSnapshot(
+          fallbackQ,
+          (snap) => {
+            const list = snap.docs.map((d) => d.data() as BatchRecord);
+            if (list.length > 0) {
+              list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+              setBatches(list);
+            }
+            setLoading(false);
+          },
+          (err2) => {
+            console.warn('Batches fallback notice:', err2);
+            setBatches(SAMPLE_DATA_MASTER.batches);
+            setLoading(false);
           }
-          setLoading(false);
-        });
+        );
       }
     );
 

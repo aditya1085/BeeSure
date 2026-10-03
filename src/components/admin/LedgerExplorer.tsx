@@ -50,12 +50,19 @@ export const LedgerExplorer: React.FC = () => {
       (err) => {
         console.warn('Ledger listener query error:', err);
         const fallbackQ = collection(db, 'ledgerRecords');
-        onSnapshot(fallbackQ, (snap) => {
-          const list = snap.docs.map((d) => d.data() as LedgerBlock);
-          list.sort((a, b) => b.index - a.index);
-          setBlocks(list);
-          setLoading(false);
-        });
+        onSnapshot(
+          fallbackQ,
+          (snap) => {
+            const list = snap.docs.map((d) => d.data() as LedgerBlock);
+            list.sort((a, b) => b.index - a.index);
+            setBlocks(list);
+            setLoading(false);
+          },
+          (err2) => {
+            console.warn('Ledger fallback listener notice:', err2);
+            setLoading(false);
+          }
+        );
       }
     );
 

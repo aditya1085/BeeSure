@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import {
   Hexagon,
-  Moon,
-  Sun,
   Languages,
   User,
   ShieldCheck,
@@ -26,7 +24,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { useTheme } from '../../context/ThemeContext';
 import { UserRole } from '../../types';
 import { NotificationsBell } from './NotificationsBell';
 
@@ -51,7 +48,6 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { currentUser, userProfile, activeRole, signOut, loginAsPersona } = useAuth();
   const { language, setLanguage, t } = useLanguage();
-  const { theme, toggleTheme } = useTheme();
 
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [personaMenuOpen, setPersonaMenuOpen] = useState(false);
@@ -501,20 +497,11 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Language Switcher */}
           <button
             onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-semibold shadow-xs transition"
             title="Switch Language (English / हिंदी)"
           >
-            <Languages className="w-3.5 h-3.5 text-amber-500" />
+            <Languages className="w-3.5 h-3.5 text-amber-600" />
             <span>{language === 'en' ? 'EN' : 'हिंदी'}</span>
-          </button>
-
-          {/* Theme Switcher */}
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition"
-            title="Toggle Light/Dark Theme"
-          >
-            {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4 text-amber-400" />}
           </button>
 
           {/* Instant Persona Switcher Dropdown (Real Auth + Real Firestore User Accounts) */}

@@ -19,6 +19,7 @@ import { collection, onSnapshot, doc, deleteDoc, updateDoc } from 'firebase/fire
 import { db } from '../../firebase/config';
 import { handleFirestoreError, OperationType } from '../../firebase/errors';
 import { ReviewRecord, DisputeRecord } from '../../types';
+import { SAMPLE_DATA_MASTER } from '../../services/sampleDataMaster';
 
 interface EnrichedReview extends ReviewRecord {
   fraudAnalysis?: {
@@ -65,13 +66,20 @@ export const MarketplaceModeration: React.FC = () => {
     fetchModerationReviews();
 
     // Real-time listener for disputes
-    const unsub = onSnapshot(collection(db, 'disputes'), (snap) => {
-      const list: DisputeRecord[] = snap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<DisputeRecord, 'id'>),
-      }));
-      setDisputes(list);
-    });
+    const unsub = onSnapshot(
+      collection(db, 'disputes'),
+      (snap) => {
+        const list: DisputeRecord[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<DisputeRecord, 'id'>),
+        }));
+        setDisputes(list);
+      },
+      (err) => {
+        console.warn('Disputes snapshot notice:', err);
+        setDisputes([]);
+      }
+    );
 
     return () => unsub();
   }, []);

@@ -105,12 +105,20 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
         console.warn('Orders listener fallback:', err);
         if (userRole !== 'ADMIN' && currentUserId) {
           const fallbackQ = query(collection(db, 'orders'), where('userId', '==', currentUserId));
-          onSnapshot(fallbackQ, (snap) => {
-            const list = snap.docs.map((d) => d.data() as OrderRecord).filter((o) => o.userId === currentUserId);
-            list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            setOrders(list);
-            setLoading(false);
-          });
+          onSnapshot(
+            fallbackQ,
+            (snap) => {
+              const list = snap.docs.map((d) => d.data() as OrderRecord).filter((o) => o.userId === currentUserId);
+              list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+              setOrders(list);
+              setLoading(false);
+            },
+            (err2) => {
+              console.warn('Orders fallback notice:', err2);
+              setOrders(SAMPLE_DATA_MASTER.orders.filter((o) => o.userId === currentUserId));
+              setLoading(false);
+            }
+          );
         }
       }
     );

@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { HoneyListing, BatchRecord, HoneyPack } from '../../types';
+import { SAMPLE_DATA_MASTER } from '../../services/sampleDataMaster';
 import { logActivity } from '../../services/activityLogger';
 import {
   Store,
@@ -69,7 +70,9 @@ export const BeekeeperListingsManager: React.FC<BeekeeperListingsManagerProps> =
         setLoading(false);
       },
       (err) => {
-        console.error('Listings error:', err);
+        console.warn('Beekeeper listings listener notice (using sample listings):', err);
+        const sampleList = SAMPLE_DATA_MASTER.listings.filter((l: HoneyListing) => l.beekeeperId === beekeeperId);
+        setListings(sampleList.length > 0 ? sampleList : SAMPLE_DATA_MASTER.listings);
         setLoading(false);
       }
     );

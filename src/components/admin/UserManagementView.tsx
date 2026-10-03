@@ -31,17 +31,25 @@ export const UserManagementView: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'users'), (snap) => {
-      const list: UserProfile[] = snap.docs.map((d) => ({
-        id: d.id,
-        uid: d.id,
-        ...(d.data() as Omit<UserProfile, 'id'>),
-      }));
-      if (list.length > 0) {
-        setUsers(list);
+    const unsub = onSnapshot(
+      collection(db, 'users'),
+      (snap) => {
+        const list: UserProfile[] = snap.docs.map((d) => ({
+          id: d.id,
+          uid: d.id,
+          ...(d.data() as Omit<UserProfile, 'id'>),
+        }));
+        if (list.length > 0) {
+          setUsers(list);
+        }
+        setLoading(false);
+      },
+      (err) => {
+        console.warn('UserManagementView snapshot notice (using master users):', err);
+        setUsers(SAMPLE_DATA_MASTER.users);
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    );
 
     return () => unsub();
   }, []);

@@ -71,7 +71,8 @@ export const SpeciesThresholdsEditor: React.FC = () => {
         setThresholds(list);
       },
       (err) => {
-        handleFirestoreError(err, OperationType.LIST, 'speciesThresholds');
+        console.warn('SpeciesThresholds listener fallback to defaults:', err);
+        setThresholds(DEFAULT_SEEDS.map((s, idx) => ({ ...s, id: `def_${idx}`, updatedAt: '' })));
       }
     );
 

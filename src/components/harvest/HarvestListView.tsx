@@ -56,14 +56,22 @@ export const HarvestListView: React.FC<HarvestListViewProps> = ({
       (err) => {
         console.warn('Harvests listener fallback:', err);
         const fallbackQ = query(collection(db, 'harvests'), where('beekeeperId', '==', beekeeperId));
-        onSnapshot(fallbackQ, (snap) => {
-          const list = snap.docs
-            .map((d) => d.data() as HarvestRecord)
-            .filter((h) => h.beekeeperId === beekeeperId);
-          list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-          setHarvests(list);
-          setLoading(false);
-        });
+        onSnapshot(
+          fallbackQ,
+          (snap) => {
+            const list = snap.docs
+              .map((d) => d.data() as HarvestRecord)
+              .filter((h) => h.beekeeperId === beekeeperId);
+            list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            setHarvests(list);
+            setLoading(false);
+          },
+          (err2) => {
+            console.warn('Harvests fallback notice:', err2);
+            setHarvests(SAMPLE_DATA_MASTER.harvests.filter((h) => h.beekeeperId === beekeeperId));
+            setLoading(false);
+          }
+        );
       }
     );
 

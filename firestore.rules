@@ -10,6 +10,7 @@ service cloud.firestore {
     function isSuperAdminEmail() {
       return isSignedIn() && 'email' in request.auth.token && (
         request.auth.token.email.lower() in [
+          'ashugarg1243@gmail.com',
           'gargashu138@gmail.com',
           'gargashu148@gmail.com',
           'commercial1085@gmail.com',
@@ -103,15 +104,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Hives (Strict owner filtering enforced: Beekeepers can only read/list their OWN hives)
+    // Hives (Public read for consumer traceability, map explorer, and platform counters; authenticated owner/admin write)
     match /hives/{hiveDocId} {
-      allow get, list: if isAdmin() || isLab() || isHiveOwner();
-      allow create: if isSignedIn() && (
+      allow get, list: if true;
+      allow create: if isSamplePayload() || (isSignedIn() && (
         isAdmin() ||
         request.resource.data.get('userId', '') == request.auth.uid ||
         (getAuthBeekeeperId() != '' && request.resource.data.get('beekeeperId', '') == getAuthBeekeeperId())
-      );
-      allow update: if isSignedIn() && (isAdmin() || isLab() || isHiveOwner());
+      ));
+      allow update: if isSamplePayload() || (isSignedIn() && (isAdmin() || isLab() || isHiveOwner()));
       allow delete: if isAdmin() || (isHiveOwner() && isSampleDoc());
     }
 
@@ -177,15 +178,15 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Harvests (Beekeepers record extracted honey - strictly isolated to owner)
+    // Harvests (Beekeepers record extracted honey - public read for batch inspection & consumer QR traceability)
     match /harvests/{harvestId} {
-      allow get, list: if isAdmin() || isHarvestOwner();
+      allow get, list: if true;
       allow create: if isSamplePayload() || (isSignedIn() && (
         isAdmin() ||
         request.resource.data.get('userId', '') == request.auth.uid ||
         (getAuthBeekeeperId() != '' && request.resource.data.get('beekeeperId', '') == getAuthBeekeeperId())
       ));
-      allow update: if isAdmin() || isHarvestOwner();
+      allow update: if isSamplePayload() || isAdmin() || isHarvestOwner();
       allow delete: if isAdmin() || isSampleDoc();
     }
 

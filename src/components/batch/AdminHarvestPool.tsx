@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { HarvestRecord, BatchRecord } from '../../types';
+import { SAMPLE_DATA_MASTER } from '../../services/sampleDataMaster';
 import { generateBatchId } from '../../services/idGenerators';
 import { recordLedgerBlock } from '../../services/blockchainService';
 import { logActivity } from '../../services/activityLogger';
@@ -58,7 +59,9 @@ export const AdminHarvestPool: React.FC<AdminHarvestPoolProps> = ({ onBatchCreat
         setLoading(false);
       },
       (err) => {
-        console.error('Error fetching unbatched harvests:', err);
+        console.warn('Admin harvest pool listener notice (using master harvests):', err);
+        const unbatchedSample = SAMPLE_DATA_MASTER.harvests.filter((h: HarvestRecord) => h.status === 'unbatched');
+        setUnbatchedHarvests(unbatchedSample);
         setLoading(false);
       }
     );

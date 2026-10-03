@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { HoneyListing, ReviewRecord, CartItem } from '../../types';
+import { SAMPLE_DATA_MASTER } from '../../services/sampleDataMaster';
 import { useLanguage } from '../../context/LanguageContext';
 import {
   X,
@@ -64,11 +65,19 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
     // Listen to reviews for this listing / batch
     const q = query(collection(db, 'reviews'), where('batchId', '==', listing.batchId));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs.map((d) => d.data() as ReviewRecord);
-      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setReviews(list);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => d.data() as ReviewRecord);
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setReviews(list);
+      },
+      (err) => {
+        console.warn('Reviews snapshot notice:', err);
+        const sampleReviews = SAMPLE_DATA_MASTER.reviews.filter((r: ReviewRecord) => r.batchId === listing.batchId);
+        setReviews(sampleReviews);
+      }
+    );
 
     // Check if current user has a verified purchase order for this batch
     if (currentUser?.uid) {

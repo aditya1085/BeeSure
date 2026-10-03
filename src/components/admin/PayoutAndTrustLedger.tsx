@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { PayoutRecord, TrustScoreBreakdown, TrustScoreWeights, BeekeeperProfile } from '../../types';
+import { SAMPLE_DATA_MASTER } from '../../services/sampleDataMaster';
 import { logActivity } from '../../services/activityLogger';
 import {
   DollarSign,
@@ -47,12 +48,20 @@ export const PayoutAndTrustLedger: React.FC = () => {
   useEffect(() => {
     // 1. Listen to Payouts
     const qPayouts = collection(db, 'payouts');
-    const unsubPayouts = onSnapshot(qPayouts, (snapshot) => {
-      const list = snapshot.docs.map((d) => d.data() as PayoutRecord);
-      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setPayouts(list);
-      setLoading(false);
-    });
+    const unsubPayouts = onSnapshot(
+      qPayouts,
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => d.data() as PayoutRecord);
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setPayouts(list);
+        setLoading(false);
+      },
+      (err) => {
+        console.warn('Payouts listener notice:', err);
+        setPayouts([]);
+        setLoading(false);
+      }
+    );
 
     // 2. Fetch Beekeepers
     const fetchBeekeepers = async () => {
@@ -68,13 +77,19 @@ export const PayoutAndTrustLedger: React.FC = () => {
 
     // 3. Listen to Trust Scores
     const qScores = collection(db, 'trust_scores');
-    const unsubScores = onSnapshot(qScores, (snapshot) => {
-      const map: Record<string, TrustScoreBreakdown> = {};
-      snapshot.docs.forEach((d) => {
-        map[d.id] = d.data() as TrustScoreBreakdown;
-      });
-      setTrustScores(map);
-    });
+    const unsubScores = onSnapshot(
+      qScores,
+      (snapshot) => {
+        const map: Record<string, TrustScoreBreakdown> = {};
+        snapshot.docs.forEach((d) => {
+          map[d.id] = d.data() as TrustScoreBreakdown;
+        });
+        setTrustScores(map);
+      },
+      (err) => {
+        console.warn('Trust scores listener notice:', err);
+      }
+    );
 
     return () => {
       unsubPayouts();

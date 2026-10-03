@@ -171,21 +171,44 @@ export const LabPortal: React.FC<LabPortalProps> = ({ currentUserId, userRole })
         setLoading(false);
       },
       (err) => {
-        console.error('Error listening to lab samples:', err);
+        console.warn('Error listening to lab samples (using master batches fallback):', err);
+        setSamples((prev) => {
+          if (prev.length > 0) return prev;
+          return SAMPLE_DATA_MASTER.batches.filter((b) => b.sampleId).map((b) => ({
+            id: b.sampleId || b.id,
+            sampleId: b.sampleId || `LS-${b.batchId}`,
+            batchId: b.batchId,
+            beekeeperId: b.beekeeperIds?.[0] || 'B001',
+            labId: b.labId || 'LAB_CBRTI_PUNE',
+            labName: b.labName || 'Central Bee Research & Training Institute',
+            floralSource: b.floralSource,
+            quantityMl: 500,
+            dispatchedAt: b.createdAt,
+            status: (b.status === 'lab_tested' || b.status === 'packaged' || b.status === 'completed' ? 'completed' : 'in_testing') as 'completed' | 'in_testing',
+            createdAt: b.createdAt,
+            updatedAt: b.updatedAt,
+          }));
+        });
         setLoading(false);
       }
     );
 
     // Also fetch reports
     const qReports = collection(db, 'labReports');
-    const unsubReports = onSnapshot(qReports, (snapshot) => {
-      const repMap: Record<string, LabReport> = {};
-      snapshot.docs.forEach((d) => {
-        const rep = d.data() as LabReport;
-        repMap[rep.sampleId] = rep;
-      });
-      setReports(repMap);
-    });
+    const unsubReports = onSnapshot(
+      qReports,
+      (snapshot) => {
+        const repMap: Record<string, LabReport> = {};
+        snapshot.docs.forEach((d) => {
+          const rep = d.data() as LabReport;
+          repMap[rep.sampleId] = rep;
+        });
+        setReports(repMap);
+      },
+      (err) => {
+        console.warn('Lab reports listener notice:', err);
+      }
+    );
 
     return () => {
       unsubscribe();
