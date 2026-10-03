@@ -1,0 +1,12 @@
+{
+  "projectId": "honeychain-production",
+  "appId": "1:965264229122:web:31bd40745fe4ae4551b81b",
+  "apiKey": "AIzaSyDaWuf_WVxV4GIg0MB2mUliXRPssVyZ2Os",
+  "authDomain": "honeychain-production.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "honeychain-production.firebasestorage.app",
+  "messagingSenderId": "965264229122",
+  "measurementId": "",
+  "oAuthClientId": "",
+  "recaptchaSiteKey": ""
+}

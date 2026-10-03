@@ -1,0 +1,22 @@
+{
+  "name": "BeeSure Honey Traceability",
+  "short_name": "BeeSure",
+  "description": "Direct Beekeeper-to-Consumer Traceability, IoT Brood Telemetry & Blockchain Purity Verification",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#f59e0b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/assets/beehive-logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/png"
+    }
+  ]
+}

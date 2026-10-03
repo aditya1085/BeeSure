@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BeeSure</title>
+    <meta name="description" content="BeeSure — Direct Beekeeper-to-Consumer Traceability, IoT Brood Telemetry & Blockchain Purity Verification." />
+    <meta property="og:title" content="BeeSure" />
+    <meta property="og:description" content="BeeSure — Direct Beekeeper-to-Consumer Traceability, IoT Brood Telemetry & Blockchain Purity Verification." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/assets/beehive-logo.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#f59e0b" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('hc_theme');
+          if (t === 'light') {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.classList.add('light');
+          } else {
+            document.documentElement.classList.add('dark');
+            document.documentElement.classList.remove('light');
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
