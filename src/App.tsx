@@ -48,6 +48,8 @@ import { seedPhase4Data } from './services/seedPhase4';
 import { CameraCapture, CapturedPhoto } from './components/camera/CameraCapture';
 import { QRScanner } from './components/camera/QRScanner';
 import { AuthModal } from './components/public/AuthModal';
+import { HiveDetailView } from './components/hives/HiveDetailView';
+import { extractHiveId, getHiveById } from './services/hiveLookup';
 import { Sparkles, CheckCircle, QrCode, AlertCircle, X, ShieldAlert, Cpu } from 'lucide-react';
 import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase/config';
@@ -61,6 +63,8 @@ const MainContent: React.FC = () => {
 
   const [currentTab, setCurrentTab] = useState<string>('marketplace');
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
+  const [selectedScannedHive, setSelectedScannedHive] = useState<HiveRecord | null>(null);
+  const [loadingHiveDetail, setLoadingHiveDetail] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
@@ -89,10 +93,28 @@ const MainContent: React.FC = () => {
     }
   }, [cart]);
 
-  // Seed Phase 3 and Phase 4 demo data on first launch
+  // Seed Phase 3 and Phase 4 demo data on first launch & check incoming URL parameters
   React.useEffect(() => {
     seedPhase3Data();
     seedPhase4Data();
+
+    // Check URL for direct Hive scan (e.g. Google scan /?hive=H001, /verify/hive/H001)
+    const detectedHive = extractHiveId(window.location.href) || new URLSearchParams(window.location.search).get('hive');
+    if (detectedHive) {
+      setLoadingHiveDetail(true);
+      getHiveById(detectedHive)
+        .then((hive) => {
+          setSelectedScannedHive(hive);
+          setCurrentTab('hive-detail');
+        })
+        .catch((err) => {
+          console.warn('Error loading hive from scan URL:', err);
+        })
+        .finally(() => {
+          setLoadingHiveDetail(false);
+        });
+      return;
+    }
 
     // Check URL parameters for direct pack verification
     const params = new URLSearchParams(window.location.search);
@@ -106,6 +128,18 @@ const MainContent: React.FC = () => {
   // Auto-route to assigned role dashboard on fresh login or role sync
   const lastRoutedKeyRef = React.useRef<string | null>(null);
   React.useEffect(() => {
+    // If user arrived via a direct Hive QR scan or honey pack scan, don't override their view
+    const params = new URLSearchParams(window.location.search);
+    const hasScanParam =
+      params.get('hive') ||
+      params.get('hiveId') ||
+      params.get('verifyPack') ||
+      params.get('packId') ||
+      window.location.href.includes('/verify/hive/');
+    if (hasScanParam || currentTab === 'hive-detail') {
+      return;
+    }
+
     if (currentUser?.uid) {
       const routingKey = `${currentUser.uid}_${activeRole}`;
       if (routingKey !== lastRoutedKeyRef.current) {
@@ -123,7 +157,7 @@ const MainContent: React.FC = () => {
     } else {
       lastRoutedKeyRef.current = null;
     }
-  }, [currentUser, activeRole]);
+  }, [currentUser, activeRole, currentTab]);
 
   // Role Access Checks & Restrictions
   const ADMIN_ONLY_TABS = [
@@ -258,9 +292,31 @@ const MainContent: React.FC = () => {
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [capturedPhotos, setCapturedPhotos] = useState<CapturedPhoto[]>([]);
 
-  const handleScanSuccess = (decoded: string) => {
+  const handleScanSuccess = async (decoded: string) => {
     setScanResult(decoded);
-    // If scanned decoded contains a BeeSure Pack ID, route immediately to verify-honey
+
+    // 1. Check if scanned QR is a Hive ID or Hive URL (works with Google Lens URL or in-app scanner)
+    const detectedHiveId = extractHiveId(decoded);
+    if (detectedHiveId) {
+      try {
+        setLoadingHiveDetail(true);
+        const hive = await getHiveById(detectedHiveId);
+        setSelectedScannedHive(hive);
+        setCurrentTab('hive-detail');
+
+        // Update URL query cleanly so user can share or refresh
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('hive', hive.hiveId);
+        window.history.replaceState({}, '', newUrl.toString());
+      } catch (err) {
+        console.warn('Error displaying scanned hive:', err);
+      } finally {
+        setLoadingHiveDetail(false);
+      }
+      return;
+    }
+
+    // 2. If scanned decoded contains a BeeSure Pack ID, route immediately to verify-honey
     const packMatch = decoded.match(/HB-\d{4}-[A-Z]{2}-\d{4}-P\d{4}/);
     if (packMatch) {
       setVerifyPackId(packMatch[0]);
@@ -398,6 +454,21 @@ const MainContent: React.FC = () => {
           <QRVerifyPage
             initialPackId={verifyPackId || undefined}
             onNavigate={(tab) => setCurrentTab(tab)}
+            onSelectHive={async (hId) => {
+              setLoadingHiveDetail(true);
+              try {
+                const hive = await getHiveById(hId);
+                setSelectedScannedHive(hive);
+                setCurrentTab('hive-detail');
+                const newUrl = new URL(window.location.href);
+                newUrl.searchParams.set('hive', hive.hiveId);
+                window.history.replaceState({}, '', newUrl.toString());
+              } catch (err) {
+                console.warn('Error selecting hive from verify page:', err);
+              } finally {
+                setLoadingHiveDetail(false);
+              }
+            }}
           />
         )}
 
@@ -468,6 +539,51 @@ const MainContent: React.FC = () => {
         )}
 
         {currentTab === 'my-hives' && <MyHivesView />}
+
+        {/* Scanned / Direct Hive Detail View (Accessible to all users & Google QR scans) */}
+        {currentTab === 'hive-detail' && (
+          loadingHiveDetail ? (
+            <div className="py-24 text-center space-y-4 max-w-md mx-auto animate-in fade-in">
+              <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-600 animate-pulse">
+                <Cpu className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Connecting to Apiary IoT Node...</h3>
+              <p className="text-xs text-slate-500">Retrieving verified colony species, telemetry charts, and Madhukranti provenance.</p>
+            </div>
+          ) : selectedScannedHive ? (
+            <HiveDetailView
+              hive={selectedScannedHive}
+              onBack={() => {
+                setSelectedScannedHive(null);
+                const newUrl = new URL(window.location.href);
+                newUrl.searchParams.delete('hive');
+                newUrl.searchParams.delete('hiveId');
+                window.history.replaceState({}, '', newUrl.toString());
+                if (activeRole === 'BEEKEEPER') {
+                  setCurrentTab('my-hives');
+                } else {
+                  setCurrentTab('marketplace');
+                }
+              }}
+            />
+          ) : (
+            <div className="text-center py-20 space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center mx-auto">
+                <AlertCircle className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Hive Identifier Not Found</h2>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Please make sure the QR sticker is scanned clearly, or try searching the ID in the verification portal.
+              </p>
+              <button
+                onClick={() => setCurrentTab('marketplace')}
+                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs shadow transition"
+              >
+                Back to Marketplace
+              </button>
+            </div>
+          )
+        )}
 
         {currentTab === 'harvests' && (
           <HarvestListView

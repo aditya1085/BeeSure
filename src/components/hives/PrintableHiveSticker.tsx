@@ -14,7 +14,8 @@ export const PrintableHiveSticker: React.FC<PrintableHiveStickerProps> = ({ hive
   useEffect(() => {
     const generateQr = async () => {
       try {
-        const url = `${window.location.origin}/verify/hive/${hive.hiveId}`;
+        // Universal web URL: Works directly with Google Lens, phone camera, or in-app scanner
+        const url = `${window.location.origin}/?hive=${encodeURIComponent(hive.hiveId)}`;
         const dataUrl = await QRCode.toDataURL(url, {
           width: 260,
           margin: 1,

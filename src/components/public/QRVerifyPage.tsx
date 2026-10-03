@@ -56,6 +56,7 @@ interface QRVerifyPageProps {
   onNavigate?: (tab: string) => void;
   onNavigateMarketplace?: () => void;
   onNavigateHome?: () => void;
+  onSelectHive?: (hiveId: string) => void;
 }
 
 export const QRVerifyPage: React.FC<QRVerifyPageProps> = ({
@@ -64,6 +65,7 @@ export const QRVerifyPage: React.FC<QRVerifyPageProps> = ({
   onNavigate,
   onNavigateMarketplace,
   onNavigateHome,
+  onSelectHive,
 }) => {
   const { t } = useLanguage();
   const effectivePackId = initialPackId || packIdParam || '';
@@ -120,6 +122,23 @@ export const QRVerifyPage: React.FC<QRVerifyPageProps> = ({
         .replace(/-JK-(\d{4})/i, '-JA-$1')
         .replace(/-MH-(\d{4})/i, '-MA-$1')
         .replace(/-WB-(\d{4})/i, '-WE-$1');
+
+      // Check if user entered a Hive ID (e.g. H001, H012, HIVE-01)
+      const isHive = /^H\d{2,6}$/i.test(cleanId) || /^HIVE[-_]\w+$/i.test(cleanId) || cleanId.toLowerCase().startsWith('hive');
+      if (isHive) {
+        if (onSelectHive) {
+          onSelectHive(cleanId);
+          setLoading(false);
+          return;
+        } else if (onNavigate) {
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.set('hive', cleanId);
+          window.history.replaceState({}, '', newUrl.toString());
+          onNavigate('hive-detail');
+          setLoading(false);
+          return;
+        }
+      }
 
       // Format validation
       const isPackPattern = /^(?:HB-\d{4}-[A-Z]{2}-\d{4}-P\d{4}|PACK-[a-zA-Z0-9_\-]+)$/i.test(cleanId) || cleanId.includes('-P');
